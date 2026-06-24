@@ -1,0 +1,21 @@
+{
+  "name": "backpressure",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "A capability pack for agentic coding CLIs (Claude Code and Codex CLI).",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.0",
+    "tsup": "^8.5.1",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.9"
+  }
+}
