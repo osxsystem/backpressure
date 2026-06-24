@@ -9,6 +9,10 @@ Files:
 - `CLAUDE.md` — the per-task cycle and hard rules, auto-read every iteration.
 - `ralph.sh`  — the loop: caps, test + lint gate, stall detection.
 
+> **Using the built toolkit** (the `backpressure` CLI, the issue tracker, skills,
+> adapters)? See **[`docs/USER_GUIDE.md`](docs/USER_GUIDE.md)**. This README covers
+> the *loop pack* that builds it.
+
 ## Run it (safely)
 
 ### 1. Isolate — do not run on your real repo
