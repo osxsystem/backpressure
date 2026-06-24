@@ -19,7 +19,7 @@ Tuning notes (for the human, not the agent):
 
 ## Milestone B — task contract + issue tracker
 
-- [ ] T3: Define the Task schema with zod in `src/core/task.ts` (fields: id, title,
+- [x] T3: Define the Task schema with zod in `src/core/task.ts` (fields: id, title,
   status enum [open|done|blocked], acceptance, scope, deps[]). Accept: a test validates
   a well-formed task and rejects one with a bad status.
 - [ ] T4: Task store interface + JSON-file implementation in `src/tracker/store.ts`
