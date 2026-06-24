@@ -88,5 +88,5 @@ Tuning notes (for the human, not the agent):
 
 - [x] T21: `npm run build` (tsup) produces `dist/` with an executable `dist/cli.js`.
   Accept: a test runs the build and asserts `dist/cli.js` exists.
-- [ ] T22: End-to-end smoke — `init` into a temp repo, assert both `.claude/` and `.codex/`
+- [x] T22: End-to-end smoke — `init` into a temp repo, assert both `.claude/` and `.codex/`
   artifacts are present and parse. Accept: the e2e test passes.
