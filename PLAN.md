@@ -69,7 +69,7 @@ Tuning notes (for the human, not the agent):
 - [x] T16: Pure `planInstall(target, repoPath)` in `src/install/plan.ts` — compute the list
   of files to write (skills dir, agents, hooks, mcp config) for the target. Accept: a test
   asserts the planned file list for `claude` and for `codex`.
-- [ ] T17: `init` command writes the planned files, supports `--dry-run`. Accept: a dry-run
+- [x] T17: `init` command writes the planned files, supports `--dry-run`. Accept: a dry-run
   test against a temp dir writes nothing and returns the plan; a real-run test asserts the
   files exist on disk.
 - [ ] T18: Wire the commander CLI bin (`backpressure init|build|index`) in `src/cli.ts` and
