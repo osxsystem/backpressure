@@ -28,7 +28,7 @@ Tuning notes (for the human, not the agent):
 - [x] T5: Next-task selection in `src/tracker/select.ts` — return the first `open` task
   whose `deps` are all `done`. Accept: a fixture test returns the correct task and
   skips one with an unmet dependency.
-- [ ] T6: Issue-tracker MCP server in `src/tracker/server.ts` exposing tools `next`,
+- [x] T6: Issue-tracker MCP server in `src/tracker/server.ts` exposing tools `next`,
   `update`, `create` via @modelcontextprotocol/sdk. Accept: a test builds the server and
   asserts all three tools are registered with their zod input schemas.
 
