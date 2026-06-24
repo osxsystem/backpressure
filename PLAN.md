@@ -45,7 +45,7 @@ Tuning notes (for the human, not the agent):
 
 ## Milestone D — adapters (compile per target)
 
-- [ ] T10: Hook definition type + `emitClaudeHooks()` -> settings.json fragment in
+- [x] T10: Hook definition type + `emitClaudeHooks()` -> settings.json fragment in
   `src/adapters/claude/hooks.ts`. Accept: a test asserts the emitted JSON for a sample hook.
 - [ ] T11: `emitCodexHooks()` -> config.toml fragment using smol-toml in
   `src/adapters/codex/hooks.ts`. Accept: a test round-trips (emit -> parse) and asserts fields.
