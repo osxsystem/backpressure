@@ -52,7 +52,7 @@ Tuning notes (for the human, not the agent):
 - [x] T12: Subagent definition type + `emitClaudeAgents()` (markdown) and
   `emitCodexAgents()` ([agents] TOML) in `src/adapters/*/agents.ts`. Accept: tests assert
   both outputs from one shared definition.
-- [ ] T13: MCP config emitters — `emitClaudeMcp()` (.mcp.json) and `emitCodexMcp()`
+- [x] T13: MCP config emitters — `emitClaudeMcp()` (.mcp.json) and `emitCodexMcp()`
   (config.toml [mcp_servers]). Accept: tests assert both outputs from one server definition.
 
 ## Milestone E — skills (portable)
