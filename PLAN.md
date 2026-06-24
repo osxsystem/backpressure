@@ -60,7 +60,7 @@ Tuning notes (for the human, not the agent):
 - [x] T14: Skills loader in `src/skills/load.ts` — scan a skills dir and parse each
   SKILL.md YAML frontmatter (name, description). Accept: a test parses a fixture skill and
   returns name+description, and rejects a skill missing `description`.
-- [ ] T15: Bundle the `building-adaptive-ui` skill under `skills/building-adaptive-ui/`
+- [x] T15: Bundle the `building-adaptive-ui` skill under `skills/building-adaptive-ui/`
   (SKILL.md + scripts/check-hardcoded-colors.sh). Accept: a test asserts the loader finds
   it and its frontmatter is valid.
 
