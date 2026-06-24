@@ -39,7 +39,7 @@ Tuning notes (for the human, not the agent):
 - [x] T8: Pure `buildArgv(target, prompt, opts)` in `src/seam/argv.ts` (headless, sandbox/
   permission, model, maxTurns). Accept: a test asserts the exact argv for both `claude`
   and `codex` given identical opts.
-- [ ] T9: `runAgent(target, prompt, opts)` in `src/seam/run.ts` wrapping child_process with
+- [x] T9: `runAgent(target, prompt, opts)` in `src/seam/run.ts` wrapping child_process with
   an injectable spawn. Accept: a test with a fake spawn asserts the command + argv and
   parses the exit code.
 
