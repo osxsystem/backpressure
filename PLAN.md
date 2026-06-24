@@ -57,7 +57,7 @@ Tuning notes (for the human, not the agent):
 
 ## Milestone E — skills (portable)
 
-- [ ] T14: Skills loader in `src/skills/load.ts` — scan a skills dir and parse each
+- [x] T14: Skills loader in `src/skills/load.ts` — scan a skills dir and parse each
   SKILL.md YAML frontmatter (name, description). Accept: a test parses a fixture skill and
   returns name+description, and rejects a skill missing `description`.
 - [ ] T15: Bundle the `building-adaptive-ui` skill under `skills/building-adaptive-ui/`
