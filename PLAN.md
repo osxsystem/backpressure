@@ -25,7 +25,7 @@ Tuning notes (for the human, not the agent):
 - [x] T4: Task store interface + JSON-file implementation in `src/tracker/store.ts`
   (create, get, list, update). Accept: a test does a create -> get -> update -> list
   round-trip against a temp file.
-- [ ] T5: Next-task selection in `src/tracker/select.ts` — return the first `open` task
+- [x] T5: Next-task selection in `src/tracker/select.ts` — return the first `open` task
   whose `deps` are all `done`. Accept: a fixture test returns the correct task and
   skips one with an unmet dependency.
 - [ ] T6: Issue-tracker MCP server in `src/tracker/server.ts` exposing tools `next`,
