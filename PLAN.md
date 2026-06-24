@@ -36,7 +36,7 @@ Tuning notes (for the human, not the agent):
 
 - [x] T7: Define `AgentTarget` and per-target flag maps for `claude` and `codex` in
   `src/seam/targets.ts`. Accept: a test asserts the headless + permission flags for each.
-- [ ] T8: Pure `buildArgv(target, prompt, opts)` in `src/seam/argv.ts` (headless, sandbox/
+- [x] T8: Pure `buildArgv(target, prompt, opts)` in `src/seam/argv.ts` (headless, sandbox/
   permission, model, maxTurns). Accept: a test asserts the exact argv for both `claude`
   and `codex` given identical opts.
 - [ ] T9: `runAgent(target, prompt, opts)` in `src/seam/run.ts` wrapping child_process with
