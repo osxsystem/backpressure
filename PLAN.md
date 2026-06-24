@@ -66,7 +66,7 @@ Tuning notes (for the human, not the agent):
 
 ## Milestone F — installer / CLI
 
-- [ ] T16: Pure `planInstall(target, repoPath)` in `src/install/plan.ts` — compute the list
+- [x] T16: Pure `planInstall(target, repoPath)` in `src/install/plan.ts` — compute the list
   of files to write (skills dir, agents, hooks, mcp config) for the target. Accept: a test
   asserts the planned file list for `claude` and for `codex`.
 - [ ] T17: `init` command writes the planned files, supports `--dry-run`. Accept: a dry-run
