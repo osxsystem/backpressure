@@ -47,7 +47,7 @@ Tuning notes (for the human, not the agent):
 
 - [x] T10: Hook definition type + `emitClaudeHooks()` -> settings.json fragment in
   `src/adapters/claude/hooks.ts`. Accept: a test asserts the emitted JSON for a sample hook.
-- [ ] T11: `emitCodexHooks()` -> config.toml fragment using smol-toml in
+- [x] T11: `emitCodexHooks()` -> config.toml fragment using smol-toml in
   `src/adapters/codex/hooks.ts`. Accept: a test round-trips (emit -> parse) and asserts fields.
 - [ ] T12: Subagent definition type + `emitClaudeAgents()` (markdown) and
   `emitCodexAgents()` ([agents] TOML) in `src/adapters/*/agents.ts`. Accept: tests assert
