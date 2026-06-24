@@ -14,7 +14,7 @@ Tuning notes (for the human, not the agent):
 - [x] T1: Scaffold the TypeScript project — package.json, tsconfig.json, tsup, vitest,
   `src/` and `test/` dirs, and an npm `test` script. Accept: `npm test` runs and exits 0
   with a single passing placeholder test in `test/smoke.test.ts`.
-- [ ] T2: Add lint + format (eslint + prettier OR biome) and an npm `check` script.
+- [x] T2: Add lint + format (eslint + prettier OR biome) and an npm `check` script.
   Accept: `npm run check` exits 0 on the current tree.
 
 ## Milestone B — task contract + issue tracker
