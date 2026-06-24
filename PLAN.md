@@ -78,7 +78,7 @@ Tuning notes (for the human, not the agent):
 
 ## Milestone G — loop + governor
 
-- [ ] T19: Journal writer in `src/loop/journal.ts` — append one JSONL line per iteration
+- [x] T19: Journal writer in `src/loop/journal.ts` — append one JSONL line per iteration
   (iteration, task id, result, duration). Accept: a test writes two entries and reads them back.
 - [ ] T20: Iteration/budget governor in `src/loop/governor.ts` (maxIterations, optional
   maxBudgetUsd, stop after N consecutive failures). Accept: a test asserts it halts at the
