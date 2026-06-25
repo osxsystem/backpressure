@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import type { SubagentDefinition } from "../adapters/common/agents.js";
+import type { McpServerDefinition } from "../adapters/common/mcp.js";
 import type { AgentTarget } from "../seam/targets.js";
 import { UnknownSkillError } from "./errors.js";
 
@@ -11,6 +12,13 @@ import { UnknownSkillError } from "./errors.js";
 export interface InstallCapabilities {
   /** Subagent definitions to compile (one file each on Claude). */
   subagents: SubagentDefinition[];
+  /**
+   * MCP servers to register. Empty in v0 — the issue tracker is deferred
+   * post-v0, so nothing is registered and no MCP config is emitted. When this is
+   * empty, {@link planInstall} omits `.mcp.json` (Claude) and the
+   * `[mcp_servers]` table (Codex) entirely rather than writing an empty stub.
+   */
+  mcpServers?: McpServerDefinition[];
   /** Names of bundled skill directories to install. */
   skills: string[];
 }
@@ -25,6 +33,7 @@ export const DEFAULT_CAPABILITIES: InstallCapabilities = {
       tools: ["Read", "Grep"],
     },
   ],
+  mcpServers: [],
   skills: ["building-adaptive-ui"],
 };
 
@@ -68,10 +77,11 @@ export interface PlannedFile {
  * paths. The actual emit + write happens in the installer (a later task).
  *
  * Claude Code uses JSON split across files (`.claude/settings.json` for hooks,
- * `.claude/agents/<name>.md` per subagent, `.mcp.json`, and a skill dir per
- * bundled skill under `.claude/skills/`). Codex uses a single `config.toml`
- * (hooks + mcp_servers + agents together) plus a skill dir per skill under
- * `.codex/skills/`.
+ * `.claude/agents/<name>.md` per subagent, `.mcp.json` *only when MCP servers
+ * are registered*, and a skill dir per bundled skill under `.claude/skills/`).
+ * Codex uses a single `config.toml` (hooks + mcp_servers + agents together) plus
+ * a skill dir per skill under `.codex/skills/`. With no MCP servers (the v0
+ * default), `.mcp.json` is not planned at all.
  */
 export function planInstall(
   target: AgentTarget,
@@ -83,7 +93,9 @@ export function planInstall(
 
   if (target === "claude") {
     files.push({ path: abs(".claude", "settings.json"), kind: "hooks" });
-    files.push({ path: abs(".mcp.json"), kind: "mcp" });
+    if ((capabilities.mcpServers ?? []).length > 0) {
+      files.push({ path: abs(".mcp.json"), kind: "mcp" });
+    }
     for (const agent of capabilities.subagents) {
       files.push({ path: abs(".claude", "agents", `${agent.name}.md`), kind: "agent" });
     }

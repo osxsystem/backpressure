@@ -31,12 +31,12 @@ describe("e2e install smoke", () => {
     expect(claudeResult.written).toBe(true);
     expect(codexResult.written).toBe(true);
 
-    // --- Claude artifacts: settings.json + .mcp.json are valid JSON. ---
+    // --- Claude artifacts: settings.json is valid JSON. ---
     const settings = JSON.parse(await readFile(join(dir, ".claude", "settings.json"), "utf8"));
     expect(settings.hooks).toBeDefined();
 
-    const mcp = JSON.parse(await readFile(join(dir, ".mcp.json"), "utf8"));
-    expect(mcp.mcpServers).toBeDefined();
+    // No MCP servers are registered in v0, so no .mcp.json is written.
+    await expect(access(join(dir, ".mcp.json"))).rejects.toThrow();
 
     // The Claude skill SKILL.md was written.
     await expect(

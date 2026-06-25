@@ -2,8 +2,9 @@
 
 A **capability pack** for agentic coding CLIs (Claude Code and Codex CLI). It is
 **not** an agent or runtime — the loop, tool execution, and sandboxing belong to
-the CLI. This project ships configuration, prompts, small scripts, and two
-external programs (issue tracker + Ralph loop) that install into those CLIs.
+the CLI. This project ships configuration, prompts, small scripts, and external
+programs (the Ralph loop; an issue tracker that lives in `src/tracker/` but is
+deferred post-v0 and **not** installed in v0) that install into those CLIs.
 
 `backpressure-architecture.html` is the design blueprint (the *what* and *why*).
 `docs/USER_GUIDE.md` documents the built CLI for end users.
