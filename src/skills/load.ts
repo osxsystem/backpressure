@@ -92,3 +92,31 @@ export async function loadSkills(skillsDir: string, io: SkillsIo = nodeSkillsIo)
 
   return skills;
 }
+
+/**
+ * List the *directory names* of bundled skills under `skillsDir` — i.e. the
+ * immediate subdirectories that actually contain a `SKILL.md`. These names are
+ * the install identifiers ({@link loadSkills} returns frontmatter names, which
+ * the installer doesn't use as paths). Subdirectories without a `SKILL.md` are
+ * skipped rather than throwing, so dropping an unrelated folder under the skills
+ * dir doesn't break discovery — this is what lets `--all-skills` and opt-in
+ * validation enumerate what's installable.
+ */
+export async function listSkillDirs(
+  skillsDir: string,
+  io: SkillsIo = nodeSkillsIo,
+): Promise<string[]> {
+  const dirs = await io.listDirs(skillsDir);
+  const found: string[] = [];
+
+  for (const dir of dirs) {
+    try {
+      await io.readText(join(skillsDir, dir, "SKILL.md"));
+      found.push(dir);
+    } catch {
+      // No readable SKILL.md here — not a skill dir, so skip it.
+    }
+  }
+
+  return found;
+}

@@ -2,6 +2,10 @@
   "name": "backpressure",
   "version": "0.0.0",
   "private": true,
+  "files": [
+    "dist",
+    "skills"
+  ],
   "type": "module",
   "description": "A capability pack for agentic coding CLIs (Claude Code and Codex CLI).",
   "license": "MIT",

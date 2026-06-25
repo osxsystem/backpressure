@@ -1,6 +1,7 @@
 import { join } from "node:path";
 import type { SubagentDefinition } from "../adapters/common/agents.js";
 import type { AgentTarget } from "../seam/targets.js";
+import { UnknownSkillError } from "./errors.js";
 
 /**
  * The capabilities an install compiles into a repo. Authored once here (the
@@ -26,6 +27,32 @@ export const DEFAULT_CAPABILITIES: InstallCapabilities = {
   ],
   skills: ["building-adaptive-ui"],
 };
+
+/**
+ * Decide which bundled skills an install should write, given the set
+ * `available` (discovered under the skills dir) and the user's opt-ins. Pure.
+ *
+ * - `all: true` installs every discovered skill.
+ * - otherwise the default set ({@link DEFAULT_CAPABILITIES}) plus any `extra`
+ *   names the user opted into, de-duplicated and order-preserving.
+ *
+ * Every opt-in name is validated against `available`; an unknown one throws
+ * {@link UnknownSkillError} (so a typo fails cleanly instead of later as a
+ * missing-source error). Default skills are trusted and not re-validated — a
+ * broken default is a packaging bug, not user input.
+ */
+export function resolveInstalledSkills(
+  available: readonly string[],
+  opts: { extra?: readonly string[]; all?: boolean } = {},
+): string[] {
+  if (opts.all) return [...available];
+
+  const extra = opts.extra ?? [];
+  for (const name of extra) {
+    if (!available.includes(name)) throw new UnknownSkillError(name, available);
+  }
+  return [...new Set([...DEFAULT_CAPABILITIES.skills, ...extra])];
+}
 
 /** One planned file: where to write it and what kind of artifact it is. */
 export interface PlannedFile {

@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { loadSkills, parseFrontmatter } from "../../src/skills/load.js";
+import { listSkillDirs, loadSkills, parseFrontmatter } from "../../src/skills/load.js";
 
 describe("loadSkills", () => {
   let dir: string;
@@ -37,6 +37,38 @@ describe("loadSkills", () => {
     await writeSkill("broken", "---\nname: broken\n---\n\n# Body\n");
 
     await expect(loadSkills(dir)).rejects.toThrow(/broken/);
+  });
+});
+
+describe("listSkillDirs", () => {
+  let dir: string;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "bp-skilldirs-"));
+  });
+
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it("returns directory names that contain a SKILL.md and skips the rest", async () => {
+    await mkdir(join(dir, "alpha"), { recursive: true });
+    await writeFile(
+      join(dir, "alpha", "SKILL.md"),
+      "---\nname: alpha\ndescription: x\n---\n",
+      "utf8",
+    );
+    await mkdir(join(dir, "beta"), { recursive: true });
+    await writeFile(
+      join(dir, "beta", "SKILL.md"),
+      "---\nname: beta\ndescription: y\n---\n",
+      "utf8",
+    );
+    // A non-skill folder (no SKILL.md) must not be reported.
+    await mkdir(join(dir, "not-a-skill"), { recursive: true });
+
+    const names = await listSkillDirs(dir);
+    expect(names.sort()).toEqual(["alpha", "beta"]);
   });
 });
 

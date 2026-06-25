@@ -1,6 +1,11 @@
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { planInstall } from "../../src/install/plan.js";
+import { UnknownSkillError } from "../../src/install/errors.js";
+import {
+  DEFAULT_CAPABILITIES,
+  planInstall,
+  resolveInstalledSkills,
+} from "../../src/install/plan.js";
 
 const repo = "/tmp/repo";
 
@@ -29,6 +34,12 @@ describe("planInstall", () => {
     ]);
   });
 
+  it("derives agent files from a custom skill list", () => {
+    const files = planInstall("claude", repo, { subagents: [], skills: ["skill-creator"] });
+    const skillPaths = files.filter((f) => f.kind === "skill").map((f) => f.path);
+    expect(skillPaths).toEqual([join(repo, ".claude", "skills", "skill-creator", "SKILL.md")]);
+  });
+
   it("derives agent files from the capability set", () => {
     const files = planInstall("claude", repo, {
       subagents: [
@@ -42,5 +53,32 @@ describe("planInstall", () => {
       join(repo, ".claude", "agents", "planner.md"),
       join(repo, ".claude", "agents", "reviewer.md"),
     ]);
+  });
+});
+
+describe("resolveInstalledSkills", () => {
+  const available = ["building-adaptive-ui", "skill-creator"];
+
+  it("returns the defaults when no opt-ins are given", () => {
+    expect(resolveInstalledSkills(available)).toEqual(DEFAULT_CAPABILITIES.skills);
+  });
+
+  it("adds opt-in skills to the defaults, de-duplicated", () => {
+    expect(resolveInstalledSkills(available, { extra: ["skill-creator"] })).toEqual([
+      ...DEFAULT_CAPABILITIES.skills,
+      "skill-creator",
+    ]);
+    // An opt-in that's already a default doesn't duplicate.
+    expect(resolveInstalledSkills(available, { extra: ["building-adaptive-ui"] })).toEqual(
+      DEFAULT_CAPABILITIES.skills,
+    );
+  });
+
+  it("returns every discovered skill when all is set", () => {
+    expect(resolveInstalledSkills(available, { all: true })).toEqual(available);
+  });
+
+  it("throws UnknownSkillError for an opt-in that isn't bundled", () => {
+    expect(() => resolveInstalledSkills(available, { extra: ["nope"] })).toThrow(UnknownSkillError);
   });
 });
