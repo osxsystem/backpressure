@@ -4,11 +4,11 @@ import type { HookDefinition } from "../../../src/adapters/common/hooks.js";
 
 describe("emitClaudeHooks", () => {
   it("emits a Stop test-gate hook with no matcher", () => {
-    const defs: HookDefinition[] = [{ event: "Stop", command: "npm test" }];
+    const defs: HookDefinition[] = [{ event: "Stop", command: "pnpm test" }];
 
     expect(emitClaudeHooks(defs)).toEqual({
       hooks: {
-        Stop: [{ hooks: [{ type: "command", command: "npm test" }] }],
+        Stop: [{ hooks: [{ type: "command", command: "pnpm test" }] }],
       },
     });
   });
@@ -34,7 +34,7 @@ describe("emitClaudeHooks", () => {
     const defs: HookDefinition[] = [
       { event: "PreToolUse", matcher: "Bash", command: "a" },
       { event: "PreToolUse", matcher: "Write", command: "b" },
-      { event: "Stop", command: "npm test" },
+      { event: "Stop", command: "pnpm test" },
     ];
 
     const fragment = emitClaudeHooks(defs);

@@ -13,7 +13,7 @@
 #   AGENT=codex ./ralph.sh     # drive Codex instead
 #   MAX_ITERS=2 ./ralph.sh     # attended dry run: watch 2 iterations
 #   BUDGET_USD=2.00 ./ralph.sh # add a per-iteration spend cap (Claude only)
-#   TEST_CMD="pnpm test" ./ralph.sh
+#   TEST_CMD="npm test" ./ralph.sh
 
 set -uo pipefail
 
@@ -21,8 +21,8 @@ AGENT="${AGENT:-claude}"          # which CLI to command: claude | codex
 MAX_ITERS="${MAX_ITERS:-25}"      # hard ceiling on iterations
 MAX_STALLS="${MAX_STALLS:-3}"     # stop after N iterations with no new commit
 BUDGET_USD="${BUDGET_USD:-}"      # optional per-iteration USD cap, e.g. 2.00
-TEST_CMD="${TEST_CMD:-npm test}"                      # tests (hard gate)
-CHECK_CMD="${CHECK_CMD:-npm run check --if-present}"  # lint/format; no-op until T2 adds a check script
+TEST_CMD="${TEST_CMD:-pnpm test}"                      # tests (hard gate)
+CHECK_CMD="${CHECK_CMD:-pnpm run check --if-present}"  # lint/format; no-op until T2 adds a check script
 MAX_TURNS="${MAX_TURNS:-40}"                          # cap actions per iteration
 
 # --- preflight safety: refuse to run on a primary branch -------------------
@@ -83,7 +83,7 @@ while grep -qE '^- \[ \]' PLAN.md; do
     || echo "($AGENT exited non-zero this iteration — see .ralph/iter-$n.json)"
 
   # --- hard backpressure: tests AND lint must pass to continue ---
-  # (CHECK_CMD is a no-op until task T2 adds an npm "check" script)
+  # (CHECK_CMD is a no-op until task T2 adds a pnpm "check" script)
   if ! { $TEST_CMD && $CHECK_CMD; } >/dev/null 2>&1; then
     echo "Verify FAILED (tests or lint) after iteration $n. Stopping for human review."; break
   fi

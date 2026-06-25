@@ -12,10 +12,10 @@ Tuning notes (for the human, not the agent):
 ## Milestone A — foundation
 
 - [x] T1: Scaffold the TypeScript project — package.json, tsconfig.json, tsup, vitest,
-  `src/` and `test/` dirs, and an npm `test` script. Accept: `npm test` runs and exits 0
+  `src/` and `test/` dirs, and a pnpm `test` script. Accept: `pnpm test` runs and exits 0
   with a single passing placeholder test in `test/smoke.test.ts`.
-- [x] T2: Add lint + format (eslint + prettier OR biome) and an npm `check` script.
-  Accept: `npm run check` exits 0 on the current tree.
+- [x] T2: Add lint + format (eslint + prettier OR biome) and a pnpm `check` script.
+  Accept: `pnpm run check` exits 0 on the current tree.
 
 ## Milestone B — task contract + issue tracker
 
@@ -86,7 +86,7 @@ Tuning notes (for the human, not the agent):
 
 ## Milestone H — packaging + smoke
 
-- [x] T21: `npm run build` (tsup) produces `dist/` with an executable `dist/cli.js`.
+- [x] T21: `pnpm run build` (tsup) produces `dist/` with an executable `dist/cli.js`.
   Accept: a test runs the build and asserts `dist/cli.js` exists.
 - [x] T22: End-to-end smoke — `init` into a temp repo, assert both `.claude/` and `.codex/`
   artifacts are present and parse. Accept: the e2e test passes.

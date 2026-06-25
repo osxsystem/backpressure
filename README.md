@@ -47,10 +47,10 @@ MAX_ITERS=2 ./ralph.sh
 
 Check: `git log --oneline` shows clean per-task commits, and `PLAN.md` has boxes ticked.
 
-> **Watch T1 especially.** The loop's gate runs `npm test` after every iteration,
+> **Watch T1 especially.** The loop's gate runs `pnpm test` after every iteration,
 > but tests can't pass until T1 has created `package.json` and the test script. A
 > half-finished T1 will halt the whole loop after one iteration. If that happens,
-> either split T1 into two smaller tasks (init npm + test script, then add tsup/
+> either split T1 into two smaller tasks (init pnpm + test script, then add tsup/
 > tsconfig) or do T1 by hand and let the loop start at T2.
 
 ### 3. Let it run
@@ -86,8 +86,8 @@ or a skill, then run again.
 ## Tuning
 - If a task keeps failing, split it into two smaller tasks in `PLAN.md`.
 - If the agent under-tests, strengthen the acceptance line for that task.
-- `TEST_CMD` defaults to `npm test`; override it for your runner, e.g. `TEST_CMD="pnpm test" ./ralph.sh`.
-- The loop also runs `npm run check --if-present` (lint/format) as part of the gate — a
+- `TEST_CMD` defaults to `pnpm test`; override it for your runner, e.g. `TEST_CMD="npm test" ./ralph.sh`.
+- The loop also runs `pnpm run check --if-present` (lint/format) as part of the gate — a
   no-op until task T2 adds a `check` script. Override with `CHECK_CMD="..."` if needed.
 
 ## Once you understand the mechanics

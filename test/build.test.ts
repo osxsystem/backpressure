@@ -7,9 +7,9 @@ import { describe, expect, it } from "vitest";
 // The repo root, two levels up from this file (test/ -> repo root).
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 
-describe("npm run build", () => {
+describe("pnpm run build", () => {
   it("produces an executable dist/cli.js", () => {
-    execSync("npm run build", { cwd: repoRoot, stdio: "pipe" });
+    execSync("pnpm run build", { cwd: repoRoot, stdio: "pipe" });
 
     const cliPath = join(repoRoot, "dist", "cli.js");
     const stats = statSync(cliPath);

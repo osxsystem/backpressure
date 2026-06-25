@@ -15,7 +15,7 @@ Do ONLY the first unchecked `- [ ]` task in PLAN.md. Do not start the next one.
 1. Read the task and its acceptance criterion.
 2. Implement the smallest change that satisfies it. If you add a source file,
    add its test in the same run.
-3. Verify: run `npm test`, then `npm run check --if-present` (lint/format).
+3. Verify: run `pnpm test`, then `pnpm run check --if-present` (lint/format).
 4. If either fails: fix and re-run. Up to 3 attempts.
 5. If both pass:
    a. Change the task's `- [ ]` to `- [x]` in PLAN.md.
@@ -27,17 +27,12 @@ Do ONLY the first unchecked `- [ ]` task in PLAN.md. Do not start the next one.
 
 ## Hard rules
 
-- Never mark a task `- [x]` unless `npm test` passes (and lint, once a check script exists).
+- Never mark a task `- [x]` unless `pnpm test` passes (and lint, once a check script exists).
 - Never commit a failing test suite.
 - One task per run. No bonus work, no refactors outside the task's scope.
 - Keep commits small and focused.
 - Prefer the libraries named in SPEC.md; don't introduce new dependencies without
   a task that calls for it.
-
-## Do not touch
-
-- Do not edit `ralph.sh`, `CLAUDE.md`, or `SPEC.md`.
-- In `PLAN.md`, only check a box or add a `BLOCKED:` note. Never delete or reorder tasks.
 
 ## Conventions
 

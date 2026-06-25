@@ -17,7 +17,7 @@ import {
 } from "./plan.js";
 
 /** The default hooks Backpressure installs: a Stop-gate that runs the tests. */
-export const DEFAULT_HOOKS: HookDefinition[] = [{ event: "Stop", command: "npm test" }];
+export const DEFAULT_HOOKS: HookDefinition[] = [{ event: "Stop", command: "pnpm test" }];
 
 /** The default MCP servers Backpressure registers: the issue tracker. */
 export const DEFAULT_MCP_SERVERS: McpServerDefinition[] = [

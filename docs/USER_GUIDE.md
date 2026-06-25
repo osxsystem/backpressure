@@ -35,7 +35,7 @@ write those by hand — `backpressure init` emits them.
 ## Requirements
 
 - **Node.js 20+** (developed on Node 22).
-- **npm** (the repo ships a `package-lock.json`).
+- **pnpm** (the repo ships a `pnpm-lock.yaml`; provision it via `corepack enable`).
 - One or both target CLIs installed and on your `PATH` to actually *run* the
   output: `claude` (Claude Code) and/or `codex` (Codex CLI).
 
@@ -46,13 +46,13 @@ write those by hand — `backpressure init` emits them.
 Backpressure is a TypeScript project. Clone it, install, and build:
 
 ```bash
-npm install      # install dependencies
-npm test         # run the test suite (vitest)
-npm run check    # lint + format + typecheck (biome + tsc)
-npm run build    # bundle to dist/ (produces dist/cli.js, executable)
+pnpm install     # install dependencies
+pnpm test        # run the test suite (vitest)
+pnpm run check   # lint + format + typecheck (biome + tsc)
+pnpm run build   # bundle to dist/ (produces dist/cli.js, executable)
 ```
 
-`npm run build` uses **tsup** and emits an executable `dist/cli.js` — the
+`pnpm run build` uses **tsup** and emits an executable `dist/cli.js` — the
 `backpressure` binary (declared in `package.json`'s `bin` field).
 
 Run the CLI directly from the build:
@@ -64,7 +64,7 @@ node dist/cli.js --help
 Or link it onto your `PATH` for development:
 
 ```bash
-npm link                 # makes `backpressure` available globally
+pnpm link --global       # makes `backpressure` available globally
 backpressure --help
 ```
 
@@ -120,7 +120,7 @@ Behaviour:
 
 - Writes into `process.cwd()`.
 - Installs the **default capability set**: a `reviewer` subagent, a `Stop`-event
-  test-gate hook (`npm test`), the `tracker` MCP server registration, and the
+  test-gate hook (`pnpm test`), the `tracker` MCP server registration, and the
   bundled `building-adaptive-ui` skill.
 - On success prints one line per file: `Wrote: <path>` (or `Planned: <path>` for
   a dry run).
@@ -154,7 +154,7 @@ The same capability set, compiled to each target's native layout:
 {
   "hooks": {
     "Stop": [
-      { "hooks": [ { "type": "command", "command": "npm test" } ] }
+      { "hooks": [ { "type": "command", "command": "pnpm test" } ] }
     ]
   }
 }
@@ -194,7 +194,7 @@ Codex puts hooks, MCP servers, and agents in **one** `.codex/config.toml`:
 ```toml
 [[hooks]]
 event = "Stop"
-command = "npm test"
+command = "pnpm test"
 
 [mcp_servers.tracker]
 command = "node"
@@ -370,8 +370,8 @@ Configuration is via environment variables:
 | `MAX_ITERS` | `25` | Hard ceiling on iterations. |
 | `MAX_STALLS` | `3` | Stop after N iterations with no new commit. |
 | `BUDGET_USD` | (unset) | Per-iteration USD cap (Claude only; needs `--max-budget-usd` support). |
-| `TEST_CMD` | `npm test` | The hard test gate. |
-| `CHECK_CMD` | `npm run check --if-present` | Lint/format gate. |
+| `TEST_CMD` | `pnpm test` | The hard test gate. |
+| `CHECK_CMD` | `pnpm run check --if-present` | Lint/format gate. |
 | `MAX_TURNS` | `40` | Cap on actions per iteration. |
 
 Per-iteration JSON logs land in `.ralph/`. Review with `git log --oneline`,
@@ -383,7 +383,7 @@ Per-iteration JSON logs land in `.ralph/`. Review with `git log --oneline`,
 ## Extending Backpressure
 
 The CLI installs a fixed **default** capability set. To change what gets
-installed, edit the defaults (then `npm run build`), or call the
+installed, edit the defaults (then `pnpm run build`), or call the
 [library API](#library-api-reference) with your own `capabilities`.
 
 **The defaults live in two files:**
@@ -395,7 +395,7 @@ installed, edit the defaults (then `npm run build`), or call the
 
 ```ts
 export const DEFAULT_HOOKS: HookDefinition[] = [
-  { event: "Stop", command: "npm test" },
+  { event: "Stop", command: "pnpm test" },
   { event: "PreToolUse", matcher: "Bash", command: "./scripts/scope-guard.sh" },
 ];
 ```
@@ -466,9 +466,9 @@ testable without touching disk or spawning a process.
 ## Development
 
 ```bash
-npm test          # vitest (run once)
-npm run check     # biome check . && tsc --noEmit
-npm run build     # tsup -> dist/
+pnpm test         # vitest (run once)
+pnpm run check    # biome check . && tsc --noEmit
+pnpm run build    # tsup -> dist/
 ```
 
 - **Language:** TypeScript (ESM, `"type": "module"`). Imports use explicit `.js`
