@@ -4,8 +4,9 @@ Backpressure is a **capability pack** for agentic coding CLIs — currently
 **Claude Code** and **Codex CLI**. It is *not* an agent or a runtime: it ships
 configuration, prompts, small scripts, and two helper programs that you install
 *into* an existing CLI. The agent loop, tool execution, and sandboxing stay with
-the CLI; Backpressure adds the guardrails, the task tracker, the portable skills,
-and the autonomous build loop that drives it all.
+the CLI; Backpressure adds the guardrails, the portable skills, and the
+autonomous build loop that drives it all. (An issue tracker also lives in the
+tree but is deferred post-v0 — it isn't installed yet.)
 
 > New here? Read the [Quickstart](#quickstart) and the [CLI reference](#the-backpressure-cli).
 > Building or extending the toolkit? Jump to [Components](#components) and
@@ -79,8 +80,8 @@ backpressure --help
 Install Backpressure's capabilities into a target repo:
 
 ```bash
-# from the repo you want to equip (must contain a `skills/` dir — see note below)
-backpressure init --target claude     # writes .claude/ + .mcp.json
+# from the repo you want to equip
+backpressure init --target claude     # writes .claude/
 backpressure init --target codex      # writes .codex/config.toml
 ```
 
@@ -90,10 +91,10 @@ Preview without writing anything:
 backpressure init --target claude --dry-run
 ```
 
-`init` writes its files into the **current working directory** and reads bundled
-skills from **`<cwd>/skills/`**. Run it from a repo that has a `skills/` directory
-(this repo does); or use the [library API](#library-api-reference) to point
-`skillsSourceDir` elsewhere.
+`init` writes its files into the **current working directory** (the repo you're
+equipping) but reads bundled skills from the **pack's own install location**, so
+you can run it from any repo. To source skills from somewhere else, use the
+[library API](#library-api-reference) to set `skillsSourceDir`.
 
 ---
 
@@ -103,11 +104,12 @@ skills from **`<cwd>/skills/`**. Run it from a repo that has a `skills/` directo
 backpressure <command> [options]
 ```
 
-| Command | Status | What it does |
-|---------|--------|--------------|
-| `init`  | ✅ wired | Compiles and installs capabilities into the current repo. |
-| `build` | 🚧 stub | Prints `build: not yet implemented` (reserved for v0+). |
-| `index` | 🚧 stub | Prints `index: not yet implemented` (reserved for v0+). |
+| Command  | Status | What it does |
+|----------|--------|--------------|
+| `init`   | ✅ wired | Compiles and installs capabilities into the current repo. |
+| `remove` | ✅ wired | Removes previously-installed Backpressure skills. |
+| `build`  | 🚧 stub | Prints `build: not yet implemented` (reserved for v0+). |
+| `index`  | 🚧 stub | Prints `index: not yet implemented` (reserved for v0+). |
 
 ### `backpressure init`
 
@@ -115,23 +117,115 @@ backpressure <command> [options]
 |--------|---------|---------|
 | `--target <target>` | `claude` | Which CLI to compile for: `claude` or `codex`. |
 | `--dry-run` | off | Compute the plan and print the file list **without writing**. |
+| `--skill <name>` | — | Install a bundled skill **in addition** to the defaults. Repeatable (`--skill a --skill b`). An unknown name fails cleanly, listing what's available. |
+| `--all-skills` | off | Install **every** bundled skill the pack ships, not just the defaults. |
+| `--global` | off | Install skills only into the **user-level** skills dir (`~/.claude/skills` or `~/.codex/skills`). Hooks and agent files are **not** written. |
 
 Behaviour:
 
-- Writes into `process.cwd()`.
+- Without `--global`, writes into `process.cwd()`.
+- With `--global`, writes skills into `os.homedir()` (e.g. `~/.claude/skills/<name>/`)
+  and skips all project-level config (hooks, agents).
 - Installs the **default capability set**: a `reviewer` subagent, a `Stop`-event
-  test-gate hook (`pnpm test`), the `tracker` MCP server registration, and the
-  bundled `building-adaptive-ui` skill.
+  test-gate hook (`pnpm test`), and the bundled `building-adaptive-ui` skill.
+  (No MCP servers are registered in v0 — the issue tracker is deferred, so no
+  `.mcp.json` is written. See [Issue tracker](#issue-tracker-external-mcp-server).)
+- A skill is installed by **mirroring its whole directory** — `SKILL.md` plus any
+  `scripts/`, `references/`, `assets/`, etc. Files are **byte-copied**, so binary
+  assets and the executable bit on scripts are preserved.
+- Before writing anything, every skill in the resolved set is **validated** (see
+  [Pre-install verify gate](#pre-install-verify-gate)). The install is atomic —
+  nothing is written if any skill fails validation.
 - On success prints one line per file: `Wrote: <path>` (or `Planned: <path>` for
   a dry run).
 
 ```bash
 $ backpressure init --target claude
 Wrote: /repo/.claude/settings.json
-Wrote: /repo/.mcp.json
 Wrote: /repo/.claude/agents/reviewer.md
 Wrote: /repo/.claude/skills/building-adaptive-ui/SKILL.md
+
+# add a bundled meta-skill on top of the defaults
+$ backpressure init --target claude --skill skill-creator
+
+# install skills user-wide (no project-level config written)
+$ backpressure init --target claude --global
+Wrote: /Users/me/.claude/skills/building-adaptive-ui/SKILL.md
 ```
+
+> **Adding a new bundled skill:** drop a `SKILL.md` (and any resources) under
+> `skills/<name>/`. It's discovered automatically — install it on demand with
+> `--skill <name>` / `--all-skills`, or add its name to `DEFAULT_CAPABILITIES`
+> in `src/install/plan.ts` to make it part of the default set.
+
+---
+
+### `backpressure remove`
+
+Removes previously-installed Backpressure skills, the exact inverse of
+`backpressure init --skill`.
+
+| Option | Default | Meaning |
+|--------|---------|---------|
+| `--target <target>` | `claude` | Which CLI's skill dir to remove from: `claude` or `codex`. |
+| `--dry-run` | off | Show what would be removed **without deleting anything**. |
+| `--skill <name>` | — | A skill to remove (repeatable). An unknown name fails cleanly. |
+| `--all-skills` | off | Remove every bundled skill the pack ships. |
+| `--global` | off | Remove from the **user-level** skills dir (`~/.claude/skills` or `~/.codex/skills`). |
+
+Behaviour:
+
+- A bare `backpressure remove` (no `--skill` / `--all-skills`) targets the **same
+  default skill set** as a bare `backpressure init` — it is the exact inverse.
+- For each skill requested, one of three outcomes is printed:
+  - `Removed: <path>` — the skill dir was deleted (or `Would remove: <path>` for
+    a dry run).
+  - `Skipped (not installed): <skill>` — the dir was never there; nothing to do.
+  - `Refused (not a skill dir): <path>` — the dir exists but contains no
+    `SKILL.md`; `remove` refuses to delete it (safety guard).
+- The install path is derived from `planInstall` (the same function `init` uses),
+  so `remove` and `init` always agree on where skills live.
+- `--global` targets `os.homedir()` instead of `cwd()`, matching `init --global`.
+
+```bash
+$ backpressure remove --target claude
+Removed: /repo/.claude/skills/building-adaptive-ui
+
+$ backpressure remove --target claude --dry-run
+Would remove: /repo/.claude/skills/building-adaptive-ui
+
+$ backpressure remove --target claude --global
+Removed: /Users/me/.claude/skills/building-adaptive-ui
+
+# remove a skill that was never installed
+$ backpressure remove --target claude --skill skill-creator
+Skipped (not installed): skill-creator
+```
+
+---
+
+### Pre-install verify gate
+
+Before `backpressure init` writes anything, every skill in the resolved set is
+validated by `verifySkills`. For each skill `<name>`, the gate checks:
+
+1. `<skillsSourceDir>/<name>/SKILL.md` is readable (ENOENT → error).
+2. The file has a valid `---` frontmatter block with `name` **and** `description`
+   fields (missing field → error).
+3. The frontmatter `name` matches the directory name (mismatch → error).
+
+If **any** check fails, a `SkillVerificationError` is thrown and **nothing is
+written** (atomic abort). All problems across all skills are collected first, so
+you can fix everything in one pass:
+
+```
+backpressure: skill verification failed:
+ - my-skill: SKILL.md not found
+ - another-skill: invalid frontmatter: Required
+```
+
+This gate also runs for `--dry-run`, so previewing an install accurately reflects
+whether the skills are valid.
 
 ---
 
@@ -143,10 +237,14 @@ The same capability set, compiled to each target's native layout:
 
 ```
 .claude/settings.json                          # hooks
-.mcp.json                                       # MCP server registrations
 .claude/agents/reviewer.md                      # one file per subagent
 .claude/skills/building-adaptive-ui/SKILL.md    # one dir per bundled skill
 ```
+
+> No `.mcp.json` is written in v0: no MCP servers are registered (the issue
+> tracker is deferred — see [Issue tracker](#issue-tracker-external-mcp-server)).
+> When a server *is* registered, `init` emits `.mcp.json` (Claude) / an
+> `[mcp_servers]` table (Codex); with none, the file/table is omitted entirely.
 
 `.claude/settings.json` — the test-gate hook:
 
@@ -156,16 +254,6 @@ The same capability set, compiled to each target's native layout:
     "Stop": [
       { "hooks": [ { "type": "command", "command": "pnpm test" } ] }
     ]
-  }
-}
-```
-
-`.mcp.json` — the issue-tracker server registration:
-
-```json
-{
-  "mcpServers": {
-    "tracker": { "command": "node", "args": [ "dist/tracker/server.js" ] }
   }
 }
 ```
@@ -187,7 +275,7 @@ You are a careful code reviewer. Report only concrete issues.
 Codex puts hooks, MCP servers, and agents in **one** `.codex/config.toml`:
 
 ```
-.codex/config.toml                              # hooks + mcp_servers + agents
+.codex/config.toml                              # hooks + agents (+ mcp_servers when registered)
 .codex/skills/building-adaptive-ui/SKILL.md     # one dir per bundled skill
 ```
 
@@ -196,15 +284,14 @@ Codex puts hooks, MCP servers, and agents in **one** `.codex/config.toml`:
 event = "Stop"
 command = "pnpm test"
 
-[mcp_servers.tracker]
-command = "node"
-args = [ "dist/tracker/server.js" ]
-
 [agents.reviewer]
 description = "Reviews a diff for scope creep and missing tests."
 prompt = "You are a careful code reviewer. Report only concrete issues."
 tools = [ "Read", "Grep" ]
 ```
+
+> The `[mcp_servers.*]` table appears only when a server is registered. In v0
+> none is, so `config.toml` carries just hooks + agents.
 
 Skills are **portable** — the same `SKILL.md` is copied verbatim under each CLI's
 skills directory.
@@ -228,10 +315,14 @@ src/
 │  ├─ common/              # shared HookDefinition / SubagentDefinition / McpServerDefinition
 │  ├─ claude/              # emitClaudeHooks / emitClaudeAgents / emitClaudeMcp  (JSON / Markdown)
 │  └─ codex/               # emitCodexHooks / emitCodexAgents / emitCodexMcp     (TOML)
-├─ skills/load.ts          # loadSkills — scan + validate SKILL.md frontmatter
+├─ skills/
+│  ├─ load.ts              # loadSkills — scan + validate SKILL.md frontmatter
+│  └─ verify.ts            # verifySkills — pre-install validation gate
 ├─ install/
 │  ├─ plan.ts              # planInstall — pure per-target file plan
-│  └─ init.ts              # init — compile + write the planned files
+│  ├─ init.ts              # init — compile + write the planned files
+│  ├─ remove.ts            # remove — delete previously-installed skills
+│  └─ errors.ts            # InstallError hierarchy (includes SkillVerificationError)
 ├─ loop/
 │  ├─ journal.ts           # writeJournalEntry — JSONL run log
 │  └─ governor.ts          # Governor — iteration / budget / failure caps
@@ -239,6 +330,12 @@ src/
 ```
 
 ### Issue tracker (external MCP server)
+
+> **Deferred to post-v0 — not installed.** The tracker source lives in the tree
+> (`src/core/task.ts`, `src/tracker/*`) and is fully tested, but `init` does
+> **not** register it: no `.mcp.json` / `[mcp_servers]` table is emitted, and the
+> build does not bundle a runnable server. The section below documents the
+> in-tree library for when the tracker is wired up in a later release.
 
 The task queue and the loop's durable memory. A **Task** (`src/core/task.ts`) is:
 
@@ -264,12 +361,11 @@ The task queue and the loop's durable memory. A **Task** (`src/core/task.ts`) is
   | `create` | `id, title, acceptance, scope` (+ optional `status`, `deps`) | The created task. |
   | `update` | `id` (+ any fields to patch) | The updated task. |
 
-> **v0 gap:** the emitted MCP config points at `dist/tracker/server.js`, but the
-> build only bundles `dist/index.js` and `dist/cli.js`. `buildTrackerServer` is a
-> library function with no stdio bootstrap yet, so the registered server isn't
-> runnable out of the box. To use it, add a small entry that constructs a store,
-> calls `buildTrackerServer`, connects a `StdioServerTransport`, and include it in
-> the tsup `entry` list. See [Known limitations](#known-limitations--v0-notes).
+> **Wiring it up (post-v0):** `buildTrackerServer` is a library function with no
+> stdio bootstrap yet. To ship it, add a small entry that constructs a store,
+> calls `buildTrackerServer`, and connects a `StdioServerTransport`; include that
+> entry in the tsup `entry` list; and add the server to `DEFAULT_CAPABILITIES.mcpServers`
+> so `init` registers it. See [Known limitations](#known-limitations--v0-notes).
 
 ### CLI-invocation seam
 
@@ -317,10 +413,17 @@ describe can't be routed to).
 
 - **`loadSkills(dir, io?)`** scans each subdirectory's `SKILL.md`, parses the
   frontmatter, and validates it; a skill missing `description` is rejected.
-- Bundled skill: **`building-adaptive-ui`** — guidance to use design tokens
-  instead of hardcoded colors, plus `scripts/check-hardcoded-colors.sh`, which
-  greps source for hex/`rgb()`/`hsl()` literals and exits non-zero if any are
-  found (usable as a pre-commit or hook gate).
+- **`listSkillDirs(dir, io?)`** returns the directory names of bundled skills
+  (subdirs that actually contain a `SKILL.md`), skipping the rest. This is the
+  discovery primitive behind `init`'s `--skill` / `--all-skills` flags.
+- Bundled skills:
+  - **`building-adaptive-ui`** (default) — guidance to use design tokens
+    instead of hardcoded colors, plus `scripts/check-hardcoded-colors.sh`, which
+    greps source for hex/`rgb()`/`hsl()` literals and exits non-zero if any are
+    found (usable as a pre-commit or hook gate).
+  - **`skill-creator`** (opt-in) — a meta-skill for authoring, evaluating, and
+    improving skills; bundles Python eval/benchmark scripts, grader/comparator
+    subagents, and an eval viewer. Install with `--skill skill-creator`.
 
 ### Loop building blocks
 
@@ -388,8 +491,8 @@ installed, edit the defaults (then `pnpm run build`), or call the
 
 **The defaults live in two files:**
 
-- `src/install/init.ts` — `DEFAULT_HOOKS`, `DEFAULT_MCP_SERVERS`.
-- `src/install/plan.ts` — `DEFAULT_CAPABILITIES` (`subagents`, `skills`).
+- `src/install/init.ts` — `DEFAULT_HOOKS`.
+- `src/install/plan.ts` — `DEFAULT_CAPABILITIES` (`subagents`, `mcpServers`, `skills`).
 
 **Add a guardrail hook** — append to `DEFAULT_HOOKS`:
 
@@ -405,7 +508,9 @@ export const DEFAULT_HOOKS: HookDefinition[] = [
 `.claude/agents/<name>.md` and a `[agents.<name>]` TOML table.
 
 **Register an MCP server** — append an `McpServerDefinition` to
-`DEFAULT_MCP_SERVERS` (`name`, `command`, `args`, optional `env`).
+`DEFAULT_CAPABILITIES.mcpServers` (`name`, `command`, `args`, optional `env`). It
+compiles to a `.mcp.json` entry (Claude) / `[mcp_servers.<name>]` table (Codex).
+When the list is empty (the v0 default), `init` writes no MCP config at all.
 
 **Add a skill** — create `skills/<name>/SKILL.md` with valid frontmatter (and any
 `scripts/`), then add `"<name>"` to `DEFAULT_CAPABILITIES.skills`:
@@ -452,8 +557,11 @@ import from the source modules directly.
 | `adapters/claude/*` | `emitClaudeHooks`, `emitClaudeAgents`, `emitClaudeMcp` |
 | `adapters/codex/*` | `emitCodexHooks`, `emitCodexAgents`, `emitCodexMcp` |
 | `skills/load.ts` | `loadSkills`, `parseFrontmatter`, `SkillFrontmatterSchema`, `Skill`, `SkillsIo`, `nodeSkillsIo` |
+| `skills/verify.ts` | `verifySkills`, `SkillProblem` |
 | `install/plan.ts` | `planInstall`, `InstallCapabilities`, `DEFAULT_CAPABILITIES`, `PlannedFile` |
-| `install/init.ts` | `init`, `InitOptions`, `InitResult`, `InstallIo`, `nodeInstallIo`, `DEFAULT_HOOKS`, `DEFAULT_MCP_SERVERS` |
+| `install/init.ts` | `init`, `bundledSkillsDir`, `InitOptions`, `InitResult`, `InstallIo`, `nodeInstallIo`, `DEFAULT_HOOKS` |
+| `install/remove.ts` | `remove`, `RemoveOptions`, `RemoveResult`, `RemoveAction`, `RemoveIo`, `nodeRemoveIo` |
+| `install/errors.ts` | `InstallError`, `MissingSkillSourceError`, `UnknownSkillError`, `SkillVerificationError`, `isEnoent` |
 | `loop/journal.ts` | `writeJournalEntry`, `JournalEntry`, `AppendFn`, `nodeAppendFn` |
 | `loop/governor.ts` | `Governor`, `GovernorConfig`, `GovernorDecision`, `IterationOutcome` |
 
@@ -485,13 +593,16 @@ pnpm run build    # tsup -> dist/
 
 - **`build` and `index` CLI commands are stubs** — they print a "not yet
   implemented" line.
-- **The tracker MCP server isn't runnable out of the box.** The emitted config
-  references `dist/tracker/server.js`, but the build doesn't produce it and
-  `buildTrackerServer` has no stdio bootstrap yet. Add an entry + tsup entry to
-  wire it.
-- **`init` writes into the current directory** and reads skills from
-  `<cwd>/skills`; there's no `--skills-dir` flag on the CLI (use the library API's
-  `skillsSourceDir`).
+- **The issue tracker is deferred to post-v0 and is not installed.** Its source
+  (`src/core/task.ts`, `src/tracker/*`) ships in the tree and is tested, but
+  `init` registers no MCP server, so no `.mcp.json` / `[mcp_servers]` table is
+  emitted and the build produces no runnable server. Wiring it up (a stdio
+  bootstrap entry, a tsup entry, and an `McpServerDefinition` in
+  `DEFAULT_CAPABILITIES.mcpServers`) is a post-v0 task.
+- **`init` writes into the current directory** but reads bundled skills from the
+  pack's own install location (`bundledSkillsDir()`), so it can run from any repo.
+  There's no `--skills-dir` flag on the CLI; to source skills elsewhere, use the
+  library API's `skillsSourceDir`.
 - **The TS loop pieces (`journal`, `governor`, `seam`) are not yet assembled**
   into a runnable TypeScript loop or wired into `build`. The autonomous loop that
   works today is `ralph.sh`.

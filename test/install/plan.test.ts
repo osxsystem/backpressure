@@ -10,17 +10,28 @@ import {
 const repo = "/tmp/repo";
 
 describe("planInstall", () => {
-  it("plans the Claude file layout (settings.json, .mcp.json, agents, skills)", () => {
+  it("plans the Claude file layout (settings.json, agents, skills; no .mcp.json by default)", () => {
     const files = planInstall("claude", repo);
     expect(files).toEqual([
       { path: join(repo, ".claude", "settings.json"), kind: "hooks" },
-      { path: join(repo, ".mcp.json"), kind: "mcp" },
       { path: join(repo, ".claude", "agents", "reviewer.md"), kind: "agent" },
       {
         path: join(repo, ".claude", "skills", "building-adaptive-ui", "SKILL.md"),
         kind: "skill",
       },
     ]);
+  });
+
+  it("plans .mcp.json only when MCP servers are registered", () => {
+    const withServer = planInstall("claude", repo, {
+      subagents: [],
+      mcpServers: [{ name: "tracker", command: "node", args: ["server.js"] }],
+      skills: [],
+    });
+    expect(withServer).toContainEqual({ path: join(repo, ".mcp.json"), kind: "mcp" });
+
+    const withoutServer = planInstall("claude", repo, { subagents: [], skills: [] });
+    expect(withoutServer.some((f) => f.kind === "mcp")).toBe(false);
   });
 
   it("plans the Codex file layout (config.toml + skills)", () => {

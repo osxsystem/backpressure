@@ -9,7 +9,6 @@ import { emitCodexAgents } from "../adapters/codex/agents.js";
 import { emitCodexHooks } from "../adapters/codex/hooks.js";
 import { emitCodexMcp } from "../adapters/codex/mcp.js";
 import type { HookDefinition } from "../adapters/common/hooks.js";
-import type { McpServerDefinition } from "../adapters/common/mcp.js";
 import type { AgentTarget } from "../seam/targets.js";
 import { nodeSkillsIo, type SkillsIo } from "../skills/load.js";
 import { verifySkills } from "../skills/verify.js";
@@ -23,11 +22,6 @@ import {
 
 /** The default hooks Backpressure installs: a Stop-gate that runs the tests. */
 export const DEFAULT_HOOKS: HookDefinition[] = [{ event: "Stop", command: "pnpm test" }];
-
-/** The default MCP servers Backpressure registers: the issue tracker. */
-export const DEFAULT_MCP_SERVERS: McpServerDefinition[] = [
-  { name: "tracker", command: "node", args: ["dist/tracker/server.js"] },
-];
 
 /**
  * The slice of the filesystem {@link init} needs. Injectable so tests can
@@ -215,7 +209,7 @@ async function buildWrites(
         writes.push({
           op: "write",
           path: file.path,
-          contents: `${JSON.stringify(emitClaudeMcp(DEFAULT_MCP_SERVERS), null, 2)}\n`,
+          contents: `${JSON.stringify(emitClaudeMcp(capabilities.mcpServers ?? []), null, 2)}\n`,
         });
       } else if (file.kind === "agent") {
         const base = basename(file.path);
@@ -226,13 +220,14 @@ async function buildWrites(
     }
 
     // target === "codex": one config.toml carries hooks + mcp_servers + agents.
+    // The mcp_servers table is omitted entirely when no servers are registered
+    // (the v0 default) rather than emitting an empty table.
     if (file.kind === "hooks") {
-      const body = [
-        emitCodexHooks(DEFAULT_HOOKS),
-        emitCodexMcp(DEFAULT_MCP_SERVERS),
-        emitCodexAgents(capabilities.subagents),
-      ].join("\n");
-      writes.push({ op: "write", path: file.path, contents: body });
+      const mcpServers = capabilities.mcpServers ?? [];
+      const fragments = [emitCodexHooks(DEFAULT_HOOKS)];
+      if (mcpServers.length > 0) fragments.push(emitCodexMcp(mcpServers));
+      fragments.push(emitCodexAgents(capabilities.subagents));
+      writes.push({ op: "write", path: file.path, contents: fragments.join("\n") });
     }
   }
 
