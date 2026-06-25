@@ -1,5 +1,7 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { copyFile, mkdir, readdir, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { emitClaudeAgents } from "../adapters/claude/agents.js";
 import { emitClaudeHooks } from "../adapters/claude/hooks.js";
 import { emitClaudeMcp } from "../adapters/claude/mcp.js";
@@ -9,6 +11,9 @@ import { emitCodexMcp } from "../adapters/codex/mcp.js";
 import type { HookDefinition } from "../adapters/common/hooks.js";
 import type { McpServerDefinition } from "../adapters/common/mcp.js";
 import type { AgentTarget } from "../seam/targets.js";
+import { nodeSkillsIo, type SkillsIo } from "../skills/load.js";
+import { verifySkills } from "../skills/verify.js";
+import { isEnoent, MissingSkillSourceError, SkillVerificationError } from "./errors.js";
 import {
   DEFAULT_CAPABILITIES,
   type InstallCapabilities,
@@ -30,18 +35,45 @@ export const DEFAULT_MCP_SERVERS: McpServerDefinition[] = [
  * writing to disk.
  */
 export interface InstallIo {
-  /** Read a UTF-8 text file (used to copy bundled skill sources). */
-  readText(path: string): Promise<string>;
+  /**
+   * List every file under `dir`, recursively, as paths relative to `dir`.
+   * Used to mirror a bundled skill's whole tree (scripts, references, assets,
+   * not just its `SKILL.md`). Throws an ENOENT-coded error if `dir` is absent.
+   */
+  listFiles(dir: string): Promise<string[]>;
   /** Create a directory (and parents) if absent. */
   ensureDir(path: string): Promise<void>;
   /** Write a UTF-8 text file at `path`. */
   writeText(path: string, data: string): Promise<void>;
+  /**
+   * Copy a file's raw bytes (and its permission mode) from `from` to `to`.
+   * Used for bundled skill resources so binary assets and the executable bit on
+   * scripts survive the install — a UTF-8 text round-trip would corrupt either.
+   */
+  copyFile(from: string, to: string): Promise<void>;
 }
 
 /** Default {@link InstallIo} backed by `node:fs/promises`. */
 export const nodeInstallIo: InstallIo = {
-  async readText(path) {
-    return readFile(path, "utf8");
+  async listFiles(dir) {
+    // Hand-rolled walk so the returned paths are relative to `dir` regardless
+    // of Node version (readdir's recursive Dirent.parentPath/.path differ
+    // across 20.x). A first-level ENOENT propagates so callers can map it to a
+    // MissingSkillSourceError.
+    const out: string[] = [];
+    const walk = async (current: string, prefix: string): Promise<void> => {
+      const entries = await readdir(current, { withFileTypes: true });
+      for (const entry of entries) {
+        const rel = prefix ? join(prefix, entry.name) : entry.name;
+        if (entry.isDirectory()) {
+          await walk(join(current, entry.name), rel);
+        } else if (entry.isFile()) {
+          out.push(rel);
+        }
+      }
+    };
+    await walk(dir, "");
+    return out;
   },
   async ensureDir(path) {
     await mkdir(path, { recursive: true });
@@ -49,7 +81,31 @@ export const nodeInstallIo: InstallIo = {
   async writeText(path, data) {
     await writeFile(path, data, "utf8");
   },
+  async copyFile(from, to) {
+    // node:fs copyFile carries the source's permission mode, so an executable
+    // script stays executable at the destination.
+    await copyFile(from, to);
+  },
 };
+
+/**
+ * Resolve the pack's *own* bundled skills dir (`<package-root>/skills`),
+ * independent of the caller's cwd, so `init` can install into any target repo
+ * while still sourcing skills from the pack. Walks up from this module to the
+ * nearest `package.json` — which is the repo root in dev (`src/…`) and the
+ * package root once built (`dist/cli.js`). Falls back to `<cwd>/skills` if no
+ * package root is found (e.g. an unusual bundling layout).
+ */
+export function bundledSkillsDir(): string {
+  let dir = dirname(fileURLToPath(import.meta.url));
+  for (let hops = 0; hops < 16; hops++) {
+    if (existsSync(join(dir, "package.json"))) return join(dir, "skills");
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return join(process.cwd(), "skills");
+}
 
 /** Options for {@link init}. */
 export interface InitOptions {
@@ -57,10 +113,27 @@ export interface InitOptions {
   dryRun?: boolean;
   /** Capabilities to compile; defaults to {@link DEFAULT_CAPABILITIES}. */
   capabilities?: InstallCapabilities;
-  /** Absolute path to the bundled skills source dir (for copying SKILL.md). */
+  /**
+   * Absolute path to the bundled skills source dir (whose trees are copied in).
+   * Defaults to the pack's own {@link bundledSkillsDir}, so an install sources
+   * skills from the pack regardless of the target repo's cwd.
+   */
   skillsSourceDir?: string;
   /** Filesystem wrapper; defaults to {@link nodeInstallIo}. Injected in tests. */
   io?: InstallIo;
+  /**
+   * Skills filesystem wrapper used for pre-install verification only; defaults
+   * to {@link nodeSkillsIo}. Injected in tests to provide a fake skill source
+   * without touching disk.
+   */
+  skillsIo?: SkillsIo;
+  /**
+   * When true, filter the install plan to skills only — hooks, MCP server
+   * registrations, and agent files are not written. Intended for `--global`
+   * installs that write skills into `~/.claude/skills` or `~/.codex/skills`
+   * without affecting any project-level config.
+   */
+  skillsOnly?: boolean;
 }
 
 /** The outcome of {@link init}: the plan, and whether files were actually written. */
@@ -72,10 +145,20 @@ export interface InitResult {
 }
 
 /**
- * Build the `path -> contents` write operations for `target`, deriving each
- * file's body from the shared definitions via the per-target emitters. Skill
- * files are read from `skillsSourceDir`. Pure aside from reading skill sources
- * through `io`.
+ * One install operation. Generated config is materialised in memory, so it's a
+ * text {@link WriteOp.write}; bundled skill resources already exist on disk and
+ * are byte-copied ({@link WriteOp.copy}) so binaries and the executable bit
+ * survive.
+ */
+type WriteOp =
+  | { op: "write"; path: string; contents: string }
+  | { op: "copy"; path: string; from: string };
+
+/**
+ * Build the write operations for `target`: per-target config bodies derived
+ * from the shared definitions (text), plus a byte-copy per bundled skill file.
+ * Skill resources are sourced from `skillsSourceDir`. Performs no writes itself;
+ * it only enumerates skill trees through `io`.
  */
 async function buildWrites(
   target: AgentTarget,
@@ -83,36 +166,61 @@ async function buildWrites(
   capabilities: InstallCapabilities,
   skillsSourceDir: string,
   io: InstallIo,
-): Promise<Array<{ path: string; contents: string }>> {
-  const writes: Array<{ path: string; contents: string }> = [];
+): Promise<WriteOp[]> {
+  const writes: WriteOp[] = [];
 
   // Pre-compile the per-target config bodies once.
   const claudeAgents = target === "claude" ? emitClaudeAgents(capabilities.subagents) : [];
 
   for (const file of plan) {
     if (file.kind === "skill") {
-      // Mirror the bundled SKILL.md. The skill name is the parent dir of SKILL.md.
+      // Mirror the bundled skill's *whole* tree, not just SKILL.md — a skill's
+      // scripts/references/assets are load-bearing (skill-creator references
+      // its own scripts/ and eval-viewer/). The planned `file.path` is the
+      // skill's destination SKILL.md, so its dir is the destination skill root
+      // and its parent dir name is the skill (== source dir name).
       const skillName = basename(dirname(file.path));
-      const source = await io.readText(join(skillsSourceDir, skillName, "SKILL.md"));
-      writes.push({ path: file.path, contents: source });
+      const sourceSkillDir = join(skillsSourceDir, skillName);
+      const destSkillDir = dirname(file.path);
+      let relPaths: string[];
+      try {
+        relPaths = await io.listFiles(sourceSkillDir);
+      } catch (e) {
+        if (isEnoent(e)) throw new MissingSkillSourceError(skillName, skillsSourceDir);
+        throw e;
+      }
+      // An empty source dir means the skill isn't really there — treat it the
+      // same as a missing source rather than silently installing nothing.
+      if (relPaths.length === 0) throw new MissingSkillSourceError(skillName, skillsSourceDir);
+      // Byte-copy each file (preserving binary content + exec bit) rather than a
+      // text round-trip.
+      for (const rel of relPaths) {
+        writes.push({
+          op: "copy",
+          path: join(destSkillDir, rel),
+          from: join(sourceSkillDir, rel),
+        });
+      }
       continue;
     }
 
     if (target === "claude") {
       if (file.kind === "hooks") {
         writes.push({
+          op: "write",
           path: file.path,
           contents: `${JSON.stringify(emitClaudeHooks(DEFAULT_HOOKS), null, 2)}\n`,
         });
       } else if (file.kind === "mcp") {
         writes.push({
+          op: "write",
           path: file.path,
           contents: `${JSON.stringify(emitClaudeMcp(DEFAULT_MCP_SERVERS), null, 2)}\n`,
         });
       } else if (file.kind === "agent") {
         const base = basename(file.path);
         const match = claudeAgents.find((a) => basename(a.path) === base);
-        if (match) writes.push({ path: file.path, contents: match.contents });
+        if (match) writes.push({ op: "write", path: file.path, contents: match.contents });
       }
       continue;
     }
@@ -124,7 +232,7 @@ async function buildWrites(
         emitCodexMcp(DEFAULT_MCP_SERVERS),
         emitCodexAgents(capabilities.subagents),
       ].join("\n");
-      writes.push({ path: file.path, contents: body });
+      writes.push({ op: "write", path: file.path, contents: body });
     }
   }
 
@@ -148,20 +256,38 @@ export async function init(
   const {
     dryRun = false,
     capabilities = DEFAULT_CAPABILITIES,
-    skillsSourceDir = join(process.cwd(), "skills"),
+    skillsSourceDir = bundledSkillsDir(),
     io = nodeInstallIo,
+    skillsIo = nodeSkillsIo,
+    skillsOnly = false,
   } = options;
 
-  const plan = planInstall(target, repoPath, capabilities);
+  let plan = planInstall(target, repoPath, capabilities);
+
+  if (skillsOnly) {
+    plan = plan.filter((f) => f.kind === "skill");
+  }
+
+  // Validate every skill in the resolved set BEFORE writing anything, so a
+  // broken skill definition is caught atomically (a dry run also reports
+  // problems honestly — it just wouldn't write).
+  const problems = await verifySkills(skillsSourceDir, capabilities.skills, skillsIo);
+  if (problems.length > 0) {
+    throw new SkillVerificationError(problems);
+  }
 
   if (dryRun) {
     return { plan, written: false };
   }
 
   const writes = await buildWrites(target, plan, capabilities, skillsSourceDir, io);
-  for (const { path, contents } of writes) {
-    await io.ensureDir(dirname(path));
-    await io.writeText(path, contents);
+  for (const write of writes) {
+    await io.ensureDir(dirname(write.path));
+    if (write.op === "write") {
+      await io.writeText(write.path, write.contents);
+    } else {
+      await io.copyFile(write.from, write.path);
+    }
   }
 
   return { plan, written: true };
