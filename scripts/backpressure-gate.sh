@@ -34,12 +34,19 @@ if git rev-parse --verify -q main >/dev/null; then
 fi
 
 echo "== 4. duplicate-symbol guard (§5.1) =="
-pnpm exec jscpd --min-tokens 50 --threshold 0 --silent src/ \
-  || { echo "gate: duplicate code detected"; exit 1; }
+# A small budget, NOT zero-tolerance: src/ already carries ~2% legitimate minor
+# duplication, so --threshold 0 would be deterministically RED before the loop
+# does anything. The budget still trips on gross copy-paste (the failure mode
+# this guards). jscpd is the v5 native build (pinned in Dockerfile.ralph).
+pnpm exec jscpd --min-tokens 50 --threshold 3 --silent src/ \
+  || { echo "gate: duplicate code over budget (3%)"; exit 1; }
 
 echo "== 5. build + tests — EXACTLY ONE at a time (flock mutex, §3.7.1) =="
-flock -n /tmp/ralph-build.lock -c 'pnpm test && pnpm run build' \
-  || { echo "gate: build/test busy or failed"; exit 1; }
+# -w 600 (wait up to 10 min) not -n: the gate runs BOTH as the Claude Stop hook
+# and again in-harness (ralph-loop.sh), so a non-blocking lock would make the
+# second caller a false RED ("busy"). Waiting serializes them instead.
+flock -w 600 /tmp/ralph-build.lock -c 'pnpm test && pnpm run build' \
+  || { echo "gate: build/test failed (or lock wait timed out)"; exit 1; }
 
 echo "== 6. spec-level acceptance — the only POSITIVE done signal (§4.3.5) =="
 pnpm run test:acceptance          # vitest run -t @acceptance (wire this in package.json)
@@ -47,9 +54,13 @@ pnpm run test:acceptance          # vitest run -t @acceptance (wire this in pack
 echo "== 7. secret scan (secrets = backpressure, §4.1.5) =="
 gitleaks detect --no-banner --redact
 
-echo "== 8. dependency guard (§4.1.6) — no unreviewed new deps; audit CVEs =="
+echo "== 8. dependency guard (§4.1.6) — no unreviewed new deps =="
 git diff --quiet -- pnpm-lock.yaml \
   || { echo "gate: pnpm-lock.yaml changed — new deps need review"; exit 1; }
-pnpm audit --audit-level=high
+# NOTE: `pnpm audit` (CVE scan) intentionally runs in CI (L7, §3.13), NOT here.
+# It needs live network egress every iteration, and a freshly-published advisory
+# would flip this per-iteration gate RED with no code change — the harness would
+# then `git reset --hard` and discard good work. Keep the inner gate hermetic;
+# audit dependencies at the merge gate where a human is present.
 
 echo "gate: GREEN"

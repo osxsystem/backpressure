@@ -1,0 +1,15 @@
+# Keep the build context small and prevent secrets/artifacts from being baked
+# into the image. Dockerfile.ralph only COPYs scripts/init-firewall.sh.
+.git
+node_modules
+dist
+*.log
+.DS_Store
+.env
+.env.*
+.claude/scheduled_tasks.lock
+STOP
+CONTEXT.md
+E2E_TEST_PROMPT.md
+e2e-report-*.md
+images

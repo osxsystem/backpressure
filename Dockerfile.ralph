@@ -1,0 +1,77 @@
+# Dockerfile.ralph — L0 sandbox image for the Backpressure/Ralph loop (§3.2.2).
+# Tier 1 hardened container for a TRUSTED repo. Pin everything; no auto-update.
+#
+# On top of the guide's base this bakes the composite gate's (§3.7) tools so the
+# Stop hook can actually run inside the loop:
+#   git · flock (util-linux) · jscpd (stage 4) · gitleaks (stage 7)
+# and pre-activates the repo's pnpm so `pnpm install` needs no runtime fetch.
+#
+# Build + run via:  ./scripts/ralph-sandbox-up.sh
+FROM node:20-bookworm-slim
+
+# Pinned versions — reproducible image. VERIFY/bump deliberately (§2.2, §5.4).
+ARG CLAUDE_VERSION=2.1.193
+ARG PNPM_VERSION=9.15.9
+ARG JSCPD_VERSION=5.0.11
+ARG GITLEAKS_VERSION=8.30.1
+# Provided by buildkit; defaults to amd64 for a plain `docker build`.
+ARG TARGETARCH
+
+# HOME is set explicitly so that even when the container starts as root
+# (--user 0, to raise the firewall) the env does NOT default to the read-only
+# /root; after `gosu agent` the agent inherits HOME=/home/agent (writable tmpfs).
+# pnpm store lives on the persistent node_modules volume (same filesystem, so
+# pnpm can hardlink) rather than a RAM tmpfs that the --memory cgroup would count.
+ENV DISABLE_AUTOUPDATER=1 \
+    CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 \
+    HOME=/home/agent \
+    PNPM_STORE_DIR=/work/node_modules/.pnpm-store \
+    npm_config_cache=/tmp/.npm-cache
+
+# corepack: pre-activate the exact pnpm the repo pins, so the firewalled runtime
+# never has to fetch a package manager.
+RUN corepack enable \
+    && corepack prepare "pnpm@${PNPM_VERSION}" --activate \
+    && useradd -m -u 1000 agent
+
+# OS tools: firewall (iptables/ipset/dnsutils/curl/jq), gate (git, util-linux=flock),
+# privilege drop (gosu), uid remap (passwd: usermod/groupmod), TLS roots.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      iptables ipset dnsutils curl jq ca-certificates gosu git util-linux passwd \
+    && rm -rf /var/lib/apt/lists/*
+
+# Claude CLI (pinned, no autoupdate) + jscpd (gate stage 4) installed globally.
+# `jscpd --version` forces the native binary to load, so a missing platform
+# package fails the IMAGE BUILD instead of iteration 1.
+RUN npm i -g "@anthropic-ai/claude-code@${CLAUDE_VERSION}" "jscpd@${JSCPD_VERSION}" \
+    && jscpd --version
+
+# gitleaks (gate stage 7): pinned release binary, arch-aware (amd64 -> x64).
+RUN set -eux; \
+    case "${TARGETARCH:-amd64}" in \
+      arm64) gl_arch=arm64 ;; \
+      *)     gl_arch=x64   ;; \
+    esac; \
+    curl -fsSL -o /tmp/gitleaks.tgz \
+      "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_${gl_arch}.tar.gz"; \
+    tar -xzf /tmp/gitleaks.tgz -C /usr/local/bin gitleaks; \
+    rm /tmp/gitleaks.tgz; \
+    gitleaks version
+
+# git: the loop commits inside a bind-mounted repo owned by a foreign uid. Mark
+# it trusted (no "dubious ownership" refusal) and bake a committer identity, or
+# `git commit` errors ("Author identity unknown") and the loop can never advance.
+RUN git config --system --add safe.directory /work \
+    && git config --system user.email "ralph@backpressure.local" \
+    && git config --system user.name  "Ralph Loop"
+
+# Bake the firewall script root-owned: the agent triggers it (as root, before the
+# gosu drop) but can never edit it.
+COPY scripts/init-firewall.sh /usr/local/bin/init-firewall.sh
+RUN chmod 0755 /usr/local/bin/init-firewall.sh
+
+# Safe default: a plain `docker run` of this image is the non-root agent. The
+# launcher overrides to root only long enough to raise the firewall, then drops
+# back to agent via gosu (Claude refuses --dangerously-skip-permissions as root).
+USER agent
+WORKDIR /work
