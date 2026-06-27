@@ -58,6 +58,21 @@ Nowhere else in the codebase should know a target's name.
   commander, smol-toml). Don't add dependencies without a reason tied to the change.
 - Keep commits small and focused.
 
+## Autonomous loop discipline (when run headless via scripts/ralph-loop.sh)
+
+When a loop iteration is driving this repo (see `PROMPT.md`, `specs/`, `fix_plan.md`):
+
+- **One productive commit per loop.** Land exactly one unchecked `fix_plan.md`
+  item, with its `@acceptance` test(s) in the same change, then commit and stop.
+- **The gate is the done-signal.** `./scripts/backpressure-gate.sh` must be green
+  before ticking a box. It runs biome + tsc + the stub/duplicate guards +
+  `pnpm test` + `pnpm run test:acceptance` + secret/dep scans (one exit code).
+- **Never push to a remote, never publish, never `git push`.** Work only on the
+  throwaway branch; a human reviews and merges to `main`. The package is
+  `private`/unpublished — never run a publish step.
+- **Capture intent.** When something keeps going wrong, fix the memory files
+  (`specs/`, tests, docs), not just the code — the next loop has amnesia.
+
 ## Non-goals (v0)
 
 No custom agent loop or context manager (the CLI's job). No marketplace publishing.
