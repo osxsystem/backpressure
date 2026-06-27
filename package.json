@@ -16,6 +16,7 @@
   "scripts": {
     "build": "tsup",
     "test": "vitest run",
+    "test:acceptance": "vitest run -t @acceptance",
     "check": "biome check . && tsc --noEmit"
   },
   "devDependencies": {
