@@ -3,7 +3,7 @@ import { type AgentTarget, flagsFor } from "./targets.js";
 /**
  * Knobs for one headless agent invocation. All optional; an omitted knob means
  * "do not pass that flag". `headless` and `permission` default to `true` because
- * the loop always runs non-interactively with prompts bypassed (see `ralph.sh`).
+ * an autonomous loop always runs non-interactively with prompts bypassed.
  */
 export interface AgentOpts {
   /** Pass the headless sub-command/flag (`-p` / `exec`). Defaults to `true`. */
@@ -26,7 +26,7 @@ export interface AgentOpts {
  * Order is fixed and identical in shape across targets:
  *   `[<headless>, <prompt>, <permission>, --model <name>?, --max-turns <n>?]`
  *
- * Per `ralph.sh` this yields, given `{ model: "m", maxTurns: 5 }`:
+ * For example, given `{ model: "m", maxTurns: 5 }` this yields:
  *   - claude: `["-p", prompt, "--dangerously-skip-permissions", "--model", "m", "--max-turns", "5"]`
  *   - codex:  `["exec", prompt, "--dangerously-bypass-approvals-and-sandbox", "--model", "m"]`
  *     (Codex has no max-turns flag, so it is dropped even when requested.)

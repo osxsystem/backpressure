@@ -32,7 +32,7 @@ export interface TargetFlags {
 }
 
 /**
- * Flag spellings per target, mirroring the real CLI invocations in `ralph.sh`:
+ * Flag spellings per target, mirroring each CLI's real headless invocation:
  *
  * - claude: `claude -p "<prompt>" --dangerously-skip-permissions --max-turns <n> --model <name>`
  * - codex:  `codex exec "<prompt>" --dangerously-bypass-approvals-and-sandbox --model <name>`

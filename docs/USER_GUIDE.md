@@ -2,16 +2,15 @@
 
 Backpressure is a **capability pack** for agentic coding CLIs — currently
 **Claude Code** and **Codex CLI**. It is *not* an agent or a runtime: it ships
-configuration, prompts, small scripts, and two helper programs that you install
-*into* an existing CLI. The agent loop, tool execution, and sandboxing stay with
-the CLI; Backpressure adds the guardrails, the portable skills, and the
-autonomous build loop that drives it all. (An issue tracker also lives in the
-tree but is deferred post-v0 — it isn't installed yet.)
+configuration, prompts, and small scripts that you install *into* an existing
+CLI. The agent loop, tool execution, and sandboxing stay with the CLI;
+Backpressure adds the guardrails and the portable skills. (An issue tracker also
+lives in the tree but is deferred post-v0 — it isn't installed yet.)
 
 > New here? Read the [Quickstart](#quickstart) and the [CLI reference](#the-backpressure-cli).
 > Building or extending the toolkit? Jump to [Components](#components) and
 > [Extending Backpressure](#extending-backpressure).
-> Want the autonomous build loop? See [The Ralph loop](#the-ralph-loop).
+> Want an autonomous build loop? See [Loop building blocks](#loop-building-blocks).
 
 ---
 
@@ -427,8 +426,14 @@ describe can't be routed to).
 
 ### Loop building blocks
 
-Present and tested, ready to assemble into a TypeScript loop (the working
-autonomous loop today is `ralph.sh` — see below):
+Present and tested, ready to assemble into a TypeScript loop. v0 ships **no**
+bundled loop runner — drive the autonomous build loop with the CLI's own
+mechanism (e.g. Claude Code's built-in `/loop`) against a throwaway git worktree,
+or wire these primitives into a harness of your own. New to the autonomous-loop
+idea? See the [Ralph beginner guide](RALPH_GUIDE.md) for the technique this
+project is named after and a step-by-step workflow recipe.
+
+The building blocks:
 
 - **`writeJournalEntry(path, entry, opts?)`** appends one JSONL line per iteration:
   `{ iteration, taskId, result, duration }`. Append I/O is injectable.
@@ -444,42 +449,13 @@ gov.record("failure");
 gov.decide();   // { halt: false }  (until a cap is hit)
 ```
 
----
+The headless-invocation seam (`seam/run.ts`, `seam/argv.ts`, `seam/targets.ts`)
+builds the argv for one non-interactive agent run per target — the other half of
+a loop you assemble yourself.
 
-## The Ralph loop
-
-`ralph.sh` is the **working** autonomous build loop: it reads the next task,
-invokes a CLI headless on **one** task with fresh context, gates on tests, and
-repeats — with backpressure (a hard test/lint gate) between iterations.
-
-> ⚠️ **Run it in a container or a throwaway git worktree, never on your real
-> repo.** It runs the CLI with permission/approval prompts bypassed; git is your
-> only undo button. `ralph.sh` refuses to run on `main`/`master`.
-
-```bash
-git worktree add ../backpressure-loop -b ralph/auto
-cd ../backpressure-loop
-chmod +x ralph.sh
-
-MAX_ITERS=2 ./ralph.sh      # attended dry run: watch 2 iterations first
-./ralph.sh                  # then let it run
-```
-
-Configuration is via environment variables:
-
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `AGENT` | `claude` | Which CLI to drive: `claude` or `codex`. |
-| `MAX_ITERS` | `25` | Hard ceiling on iterations. |
-| `MAX_STALLS` | `3` | Stop after N iterations with no new commit. |
-| `BUDGET_USD` | (unset) | Per-iteration USD cap (Claude only; needs `--max-budget-usd` support). |
-| `TEST_CMD` | `pnpm test` | The hard test gate. |
-| `CHECK_CMD` | `pnpm run check --if-present` | Lint/format gate. |
-| `MAX_TURNS` | `40` | Cap on actions per iteration. |
-
-Per-iteration JSON logs land in `.ralph/`. Review with `git log --oneline`,
-`ls .ralph/`, and `grep BLOCKED PLAN.md`. See the repo
-[`README.md`](../README.md) for the full safety checklist and tuning notes.
+> ⚠️ Whatever harness you drive these with, run it in a container or a throwaway
+> git worktree, never on your real repo: an autonomous loop runs the CLI with
+> permission/approval prompts bypassed, and git is your only undo button.
 
 ---
 
@@ -603,10 +579,9 @@ pnpm run build    # tsup -> dist/
   pack's own install location (`bundledSkillsDir()`), so it can run from any repo.
   There's no `--skills-dir` flag on the CLI; to source skills elsewhere, use the
   library API's `skillsSourceDir`.
-- **The TS loop pieces (`journal`, `governor`, `seam`) are not yet assembled**
-  into a runnable TypeScript loop or wired into `build`. The autonomous loop that
-  works today is `ralph.sh`.
+- **No bundled loop runner.** The TS loop pieces (`journal`, `governor`, `seam`)
+  are tested but not assembled into a runnable TypeScript loop or wired into
+  `build`. Drive the autonomous build loop with the CLI's own mechanism (e.g.
+  Claude Code's `/loop`) or your own harness; v0 ships no loop binary.
 - **Store is a single JSON file.** SQLite (`better-sqlite3`) is a planned post-v0
   upgrade; there's no task for it yet.
-- **`BUDGET_USD` in `ralph.sh`** only works if your CLI supports
-  `--max-budget-usd`; otherwise leave it unset.

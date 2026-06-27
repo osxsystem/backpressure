@@ -2,9 +2,9 @@
 
 A **capability pack** for agentic coding CLIs (Claude Code and Codex CLI). It is
 **not** an agent or runtime — the loop, tool execution, and sandboxing belong to
-the CLI. This project ships configuration, prompts, small scripts, and external
-programs (the Ralph loop; an issue tracker that lives in `src/tracker/` but is
-deferred post-v0 and **not** installed in v0) that install into those CLIs.
+the CLI. This project ships configuration, prompts, and small scripts that install
+into those CLIs. (An issue tracker lives in `src/tracker/` but is deferred post-v0
+and **not** installed in v0.)
 
 `backpressure-architecture.html` is the design blueprint (the *what* and *why*).
 `docs/USER_GUIDE.md` documents the built CLI for end users.
@@ -27,8 +27,7 @@ Every component sorts into one of three portability tiers:
 - **Compiled per target** — one source of truth, emit native config per CLI.
   Claude Code uses JSON (`settings.json`, `.mcp.json`, `.claude/agents/*.md`);
   Codex uses TOML (`config.toml`).
-- **External program** — CLI-agnostic by construction (tracker MCP server; the
-  bash Ralph loop).
+- **External program** — CLI-agnostic by construction (the tracker MCP server).
 
 **Invariant:** anything that branches on "which CLI" lives in exactly two places —
 `src/seam/` (launching a CLI headless) and `src/adapters/` (emitting its config).
@@ -46,7 +45,6 @@ Nowhere else in the codebase should know a target's name.
 | `src/loop/` | `governor` (caps/kill switch) + `journal` (per-iteration JSONL) |
 | `src/skills/` | Skill loading; bundled skills live in `skills/` |
 | `src/cli.ts` | `backpressure` bin — `init`, `build`*, `index`* (*stubs in v0) |
-| `ralph.sh` | The loop harness (external program, not built/bundled) |
 | `issues/` | Known bugs / feedback from trials |
 
 ## Conventions
