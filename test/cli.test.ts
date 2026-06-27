@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { buildProgram, cliErrorLine } from "../src/cli.js";
 import { build, formatArtifacts } from "../src/install/build.js";
 import { MissingSkillSourceError } from "../src/install/errors.js";
+import { formatInventory, inventory } from "../src/install/inventory.js";
 
 describe("cliErrorLine", () => {
   it("returns a backpressure: line for a MissingSkillSourceError", () => {
@@ -50,6 +51,19 @@ describe("buildProgram", () => {
     const printed = formatArtifacts(await build("claude"));
     expect(printed).not.toContain("not yet implemented");
     expect(printed).toContain("settings.json");
+  });
+
+  it("@acceptance index registers --target/--json and is no longer a stub", () => {
+    const indexCmd = buildProgram().commands.find((c: commander.Command) => c.name() === "index");
+    const flags = indexCmd?.options.map((o: { long?: string }) => o.long);
+    expect(flags).toEqual(expect.arrayContaining(["--target", "--json"]));
+    expect(indexCmd?.description()).not.toContain("stub");
+  });
+
+  it("@acceptance index reports an inventory and never 'not yet implemented'", async () => {
+    const printed = formatInventory(await inventory("claude", { baseDir: process.cwd() }));
+    expect(printed).not.toContain("not yet implemented");
+    expect(printed).toContain("capabilities installed");
   });
 
   it("registers --global on init", () => {

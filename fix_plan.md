@@ -33,9 +33,9 @@ that order.
 
 ## index-command (specs/index-command.md) — cli.ts edit after build
 
-- [ ] Add `src/install/inventory.ts` exporting `inventory(target, opts)` (reuses `planInstall` for candidate paths; checks each for existence via an injected `ExistsIo`; returns `CapabilityEntry[]`; no per-target branch) and the pure `formatInventory(entries)` renderer; add sibling `test/install/inventory.test.ts` covering criteria 1-4, 6 (clean-repo all-absent, present-after-init + `.mcp.json` omission, read-only, codex via planInstall, mixed state).
-- [ ] Wire the `src/cli.ts` **index** subcommand to the real logic: `--target` (via `parseTarget`, default claude) and `--json`; print `formatInventory` to stdout (or JSON with `--json`), exit 0; reword the help off "Index the installed capabilities (stub)."; add a `test/cli.test.ts` assertion that index emits an inventory and never prints "not yet implemented" (criteria 5, 7). *(Third `cli.ts` editor — after build.)*
-- [ ] Update `docs/USER_GUIDE.md` to document `backpressure index` (`--target`/`--json`) and remove `index` from the v0 "not yet implemented" stub list in `docs/RALPH_PRODUCTION_GUIDE.md`.
+- [x] Add `src/install/inventory.ts` exporting `inventory(target, opts)` (reuses `planInstall` for candidate paths; checks each for existence via an injected `ExistsIo`; returns `CapabilityEntry[]`; no per-target branch) and the pure `formatInventory(entries)` renderer; add sibling `test/install/inventory.test.ts` covering criteria 1-4, 6 (clean-repo all-absent, present-after-init + `.mcp.json` omission, read-only, codex via planInstall, mixed state).
+- [x] Wire the `src/cli.ts` **index** subcommand to the real logic: `--target` (via `parseTarget`, default claude) and `--json`; print `formatInventory` to stdout (or JSON with `--json`), exit 0; reword the help off "Index the installed capabilities (stub)."; add a `test/cli.test.ts` assertion that index emits an inventory and never prints "not yet implemented" (criteria 5, 7). *(Third `cli.ts` editor — after build.)*
+- [x] Update `docs/USER_GUIDE.md` to document `backpressure index` (`--target`/`--json`) and remove `index` from the v0 "not yet implemented" stub list in `docs/RALPH_PRODUCTION_GUIDE.md`.
 
 ## governor-cost (specs/governor-cost.md) — independent (touches only src/seam + loop test + docs)
 

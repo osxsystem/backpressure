@@ -44,7 +44,7 @@ Nowhere else in the codebase should know a target's name.
 | `src/install/` | `init` installer + `plan` (what files `init` writes) |
 | `src/loop/` | `governor` (caps/kill switch) + `journal` (per-iteration JSONL) |
 | `src/skills/` | Skill loading; bundled skills live in `skills/` |
-| `src/cli.ts` | `backpressure` bin — `init`, `build`*, `index`* (*stubs in v0) |
+| `src/cli.ts` | `backpressure` bin — `init`, `remove`, `build`, `index` |
 | `issues/` | Known bugs / feedback from trials |
 
 ## Conventions
