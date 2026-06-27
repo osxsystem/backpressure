@@ -13,6 +13,7 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { parse } from "smol-toml";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { MissingSkillSourceError, SkillVerificationError } from "../../src/install/errors.js";
 import type { InstallIo } from "../../src/install/init.js";
@@ -88,6 +89,19 @@ describe("init", () => {
     await expect(
       access(join(dir, ".codex", "skills", "building-adaptive-ui", "SKILL.md")),
     ).resolves.toBeUndefined();
+  });
+
+  it("@acceptance init writes a .codex/config.toml whose nested Stop gate command is pnpm test", async () => {
+    // End-to-end proof the file Codex actually LOADS carries the loadable nested
+    // gate — not just the pure emitter. Codex 0.137.0 ignores a flat [[hooks]]
+    // array, so this parses the on-disk TOML and walks the nested shape.
+    await init("codex", dir, { skillsSourceDir });
+    const toml = await readFile(join(dir, ".codex", "config.toml"), "utf8");
+    const parsed = parse(toml) as unknown as {
+      hooks: Record<string, Array<{ hooks: Array<{ type: string; command: string }> }>>;
+    };
+    expect(Array.isArray(parsed.hooks)).toBe(false);
+    expect(parsed.hooks.Stop?.[0]?.hooks[0]?.command).toBe("pnpm test");
   });
 
   it("mirrors a multi-file skill's nested resources (scripts, agents, eval-viewer)", async () => {

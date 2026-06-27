@@ -14,9 +14,9 @@ that order.
 
 ## codex-hooks (specs/codex-hooks.md)
 
-- [ ] Rewrite `emitCodexHooks` in `src/adapters/codex/hooks.ts` to group `HookDefinition`s by event and emit the nested shape `{ hooks: { [event]: [{ matcher?, hooks: [{ type:'command', command }] }] } }` (`[[hooks.<Event>]]` + `[[hooks.<Event>.hooks]]`), replacing the flat `CodexHookTable`; in the SAME change replace the flat round-trip assertions in `test/adapters/codex/hooks.test.ts` with the four nested `@acceptance` tests (criteria 1-4), including the `Array.isArray(parsed.hooks) === false` tripwire.
-- [ ] Add an `@acceptance` end-to-end test in `test/install/init.test.ts` that, after `init('codex', dir)`, parses the written `.codex/config.toml` and asserts `parsed.hooks.Stop[0].hooks[0].command === 'pnpm test'` (criterion 5). No source edit — proves the on-disk file Codex loads is nested.
-- [ ] Update the "what init writes" Codex examples in `docs/RALPH_PRODUCTION_GUIDE.md` §2.7 and §3.4 from the flat `[[hooks]]` shape to the nested `[[hooks.Stop]]` + `[[hooks.Stop.hooks]]` shape so the docs match the emitter.
+- [x] Rewrite `emitCodexHooks` in `src/adapters/codex/hooks.ts` to group `HookDefinition`s by event and emit the nested shape `{ hooks: { [event]: [{ matcher?, hooks: [{ type:'command', command }] }] } }` (`[[hooks.<Event>]]` + `[[hooks.<Event>.hooks]]`), replacing the flat `CodexHookTable`; in the SAME change replace the flat round-trip assertions in `test/adapters/codex/hooks.test.ts` with the four nested `@acceptance` tests (criteria 1-4), including the `Array.isArray(parsed.hooks) === false` tripwire.
+- [x] Add an `@acceptance` end-to-end test in `test/install/init.test.ts` that, after `init('codex', dir)`, parses the written `.codex/config.toml` and asserts `parsed.hooks.Stop[0].hooks[0].command === 'pnpm test'` (criterion 5). No source edit — proves the on-disk file Codex loads is nested.
+- [x] Update the "what init writes" Codex examples in `docs/RALPH_PRODUCTION_GUIDE.md` §2.7 and §3.4 from the flat `[[hooks]]` shape to the nested `[[hooks.Stop]]` + `[[hooks.Stop.hooks]]` shape so the docs match the emitter.
 
 ## configurable-gate-hook (specs/configurable-gate-hook.md) — after codex-hooks
 

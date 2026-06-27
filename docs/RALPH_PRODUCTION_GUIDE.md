@@ -363,8 +363,9 @@ Plus `.claude/skills/building-adaptive-ui/` (the whole tree, byte-copied, exec b
 
 ```toml
 # .codex/config.toml   (hooks + [agents.reviewer] fragments; NO [mcp_servers] in v0)
-[[hooks]]
-event = "Stop"
+[[hooks.Stop]]
+[[hooks.Stop.hooks]]
+type = "command"
 command = "pnpm test"
 
 [agents.reviewer]
@@ -374,8 +375,8 @@ tools = [ "Read", "Grep" ]
 ```
 Plus `.codex/skills/building-adaptive-ui/` (whole tree). `init` is **atomic** — `verifySkills()` runs **before any write**, and a bad skill throws `SkillVerificationError` so **nothing is written**; `--dry-run` previews; `--global` writes **skills only** into `~/.claude/skills` or `~/.codex/skills`.
 
-> [!WARNING]
-> **Repo bug to know now (full fix in §3.7.4).** `src/adapters/codex/hooks.ts` emits a **flat `[[hooks]]`** array (`event="Stop"` / `command="pnpm test"`). **Codex 0.137.0 does not recognize this shape** — it expects nested `[[hooks.Stop]]` + `[[hooks.Stop.hooks]]` (or `~/.codex/hooks.json`). As shipped, the Codex Stop-gate is not loaded; align the adapter before relying on it.
+> [!NOTE]
+> **Fixed.** `src/adapters/codex/hooks.ts` now emits the **nested** `[[hooks.Stop]]` + `[[hooks.Stop.hooks]]` shape Codex 0.137.0 loads (shown above); it previously emitted a flat `[[hooks]]` array that Codex silently ignored, so the Stop gate never fired. See §3.7.4 and `specs/codex-hooks.md`.
 
 > [!CAUTION]
 > **v0 boundaries — promise nothing undelivered.** The tracker MCP server (`src/tracker/`) is **built but not installed** (no `.mcp.json` / no `[mcp_servers]`). `backpressure build` and `backpressure index` are **stubs** (`not yet implemented`). The store is a **JSON file**. The Stop hook is **hardcoded to `pnpm test`** (non-pnpm repos hand-edit, §5.2). And **there is no bundled loop runner** — `Governor`, `writeJournalEntry`, and `runAgent` are **primitives you assemble yourself** (§3.11). Cross-ref §1.6, §4.5.
@@ -662,8 +663,9 @@ backpressure init --target codex
 The exact emitted `.codex/config.toml` in v0:
 
 ```toml
-[[hooks]]
-event = "Stop"
+[[hooks.Stop]]
+[[hooks.Stop.hooks]]
+type = "command"
 command = "pnpm test"
 
 [agents.reviewer]
@@ -672,8 +674,8 @@ prompt = "You are a careful code reviewer. Report only concrete issues."
 tools = [ "Read", "Grep" ]
 ```
 
-> [!WARNING]
-> **Repo bug — the Codex gate as shipped does not load.** This flat `[[hooks]]` table is what `src/adapters/codex/hooks.ts` emits today, but **Codex 0.137.0 does not recognize it** — the CLI expects nested `[[hooks.Stop]]` + `[[hooks.Stop.hooks]]` (or a `~/.codex/hooks.json`). The corrected schema and the **hook-trust** gotcha are covered in §3.7.4. On Codex, **do not assume the installed gate fires** until you have applied that fix.
+> [!NOTE]
+> **Fixed.** `src/adapters/codex/hooks.ts` now emits this **nested** shape, which Codex 0.137.0 loads; it previously emitted a flat `[[hooks]]` table that Codex ignored. The **hook-trust** gotcha (new/changed command hooks are skipped until trusted) still applies — see §3.7.4.
 
 **Guardrail installed:** a pinned, flag-verified CLI plus a Stop-event test-gate and a diff reviewer, authored once and compiled per target. **Failure mode closed:** a fragile/unpinned CLI and untested code ending a turn unchecked. Compose the real gate in §3.7.
 
