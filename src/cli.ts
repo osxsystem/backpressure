@@ -4,6 +4,7 @@ import { homedir } from "node:os";
 import { argv, cwd } from "node:process";
 import { fileURLToPath } from "node:url";
 import commander from "commander";
+import { build, formatArtifacts } from "./install/build.js";
 import { InstallError } from "./install/errors.js";
 import { bundledSkillsDir, init } from "./install/init.js";
 import { DEFAULT_CAPABILITIES, resolveInstalledSkills } from "./install/plan.js";
@@ -180,9 +181,26 @@ export function buildProgram(): commander.Command {
 
   program
     .command("build")
-    .description("Build the distributable artifacts (stub).")
-    .action(() => {
-      process.stdout.write("build: not yet implemented\n");
+    .description("Compile and preview the per-target config (does not install).")
+    .option("--target <target>", "Which CLI to compile for (claude or codex).", "claude")
+    .option("--out <dir>", "Stage the compiled config under <dir> instead of printing it.")
+    .action(async (options: { target: string; out?: string }) => {
+      try {
+        const target = parseTarget(options.target);
+        const ops = await build(target, { out: options.out });
+        if (options.out !== undefined) {
+          for (const op of ops) {
+            if (op.op === "write") process.stdout.write(`Staged: ${op.path}\n`);
+          }
+        } else {
+          process.stdout.write(formatArtifacts(ops));
+        }
+      } catch (e) {
+        const line = cliErrorLine(e);
+        if (line === null) throw e;
+        process.stderr.write(`${line}\n`);
+        process.exitCode = 1;
+      }
     });
 
   program

@@ -162,17 +162,19 @@ export interface InitResult {
  * are byte-copied ({@link WriteOp.copy}) so binaries and the executable bit
  * survive.
  */
-type WriteOp =
+export type WriteOp =
   | { op: "write"; path: string; contents: string }
   | { op: "copy"; path: string; from: string };
 
 /**
- * Build the write operations for `target`: per-target config bodies derived
+ * Compile the write operations for `target`: per-target config bodies derived
  * from the shared definitions (text), plus a byte-copy per bundled skill file.
  * Skill resources are sourced from `skillsSourceDir`. Performs no writes itself;
- * it only enumerates skill trees through `io`.
+ * it only enumerates skill trees through `io`. Exported so `backpressure build`
+ * (`src/install/build.ts`) compiles the SAME bytes `init` installs — the single
+ * per-target emit path, so the two cannot drift.
  */
-async function buildWrites(
+export async function compileArtifacts(
   target: AgentTarget,
   plan: PlannedFile[],
   capabilities: InstallCapabilities,
@@ -295,7 +297,7 @@ export async function init(
     return { plan, written: false };
   }
 
-  const writes = await buildWrites(
+  const writes = await compileArtifacts(
     target,
     plan,
     capabilities,
