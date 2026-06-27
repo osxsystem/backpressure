@@ -82,9 +82,10 @@ test stay exactly as-is.
 2. `flagsFor("claude").costPath === "total_cost_usd"` and
    `flagsFor("codex").costPath === null`; `flagsFor("claude").jsonOutput` deep-equals
    `["--output-format", "json"]` and `flagsFor("codex").jsonOutput` deep-equals
-   `["--json"]`. The literals `"total_cost_usd"`, `"--output-format"`, and `"--json"`
+   `["--json"]`. The cost-specific spellings `"total_cost_usd"` and `"--output-format"`
    appear **nowhere** in `src/` outside `src/seam/` (proving the compile-per-target
-   invariant — these spellings live only in the seam).
+   invariant). `"--json"` is **exempt** from the scan — `index` reuses it as a generic
+   CLI flag (`src/cli.ts`), so it is not a reliable cost-leak signal.
 3. Given a fake spawn whose stdout emits `{"total_cost_usd":0.6}` then closes `0`,
    `runAgent("claude", prompt, { json: true, spawn })` resolves
    `{ exitCode: 0, costUsd: 0.6 }`. For `codex` (costPath `null`) the same stdout +
@@ -118,7 +119,8 @@ assertions are rewritten to read `result.exitCode`).
    — asserts criterion 1 (`test/seam/argv.test.ts`).
 2. `@acceptance TargetFlags carries jsonOutput + costPath per target and no cost spelling leaks outside src/seam`
    — asserts criterion 2 (`test/seam/targets.test.ts`); the leak check reads every
-   `src/**` file outside `src/seam/` and asserts the three literals are absent.
+   `src/**` file outside `src/seam/` and asserts the two cost-specific literals
+   (`"total_cost_usd"`, `"--output-format"`) are absent (`"--json"` exempt — see criterion 2).
 3. `@acceptance runAgent surfaces costUsd from claude json stdout and undefined for codex`
    — asserts criterion 3 (`test/seam/run.test.ts`).
 4. `@acceptance parseCostUsd returns undefined for garbage, empty, missing-field, and null-costPath`
@@ -172,14 +174,15 @@ Not touched (intentionally): `src/loop/governor.ts`, `test/loop/governor.test.ts
   forbids — hence criterion 5 proves the cap arms *through the existing
   `gov.record`*, and the standing gate pins `governor.ts` byte-unchanged.
 
-- **The per-CLI cost spelling lives ONLY in `src/seam`.** `total_cost_usd`,
-  `--output-format json`, and `--json` are exactly the kind of "which CLI" knowledge
-  the project invariant (CLAUDE.md: *anything that branches on which CLI lives in
-  exactly two places — `src/seam/` and `src/adapters/`*) confines to the seam.
-  Criterion 2's source-tree scan is a tripwire: if a future change inlines
-  `total_cost_usd` into a loop runner or the CLI, the scan fails. Without that
-  tripwire the literal could quietly leak and the "author once, compile per target"
-  rule would erode invisibly.
+- **The per-CLI cost spelling lives ONLY in `src/seam`.** `total_cost_usd` and
+  `--output-format json` are exactly the kind of "which CLI" knowledge the project
+  invariant (CLAUDE.md: *anything that branches on which CLI lives in exactly two
+  places — `src/seam/` and `src/adapters/`*) confines to the seam. Criterion 2's
+  source-tree scan is a tripwire: if a future change inlines `total_cost_usd` into a
+  loop runner or the CLI, the scan fails. (`--json` is **not** scanned — `index` reuses
+  it as a generic output flag, so it is not a reliable cost-leak signal; the two
+  cost-specific literals are the load-bearing ones.) Without that tripwire the literal
+  could quietly leak and the "author once, compile per target" rule would erode invisibly.
 
 - **`RunResult` struct over a callback / parallel `runAgentCaptured`.** The task asks
   for cost "surfaced as a field on `runAgent`'s result", and the only non-test caller
