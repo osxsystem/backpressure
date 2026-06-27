@@ -325,7 +325,7 @@ export const TARGET_FLAGS: Record<AgentTarget, TargetFlags> = {
 export function buildArgv(target: AgentTarget, prompt: string, opts?: AgentOpts): string[];
 
 // src/seam/run.ts — spawns BINARIES[target] via an injectable SpawnFn; resolves the exit code
-export function runAgent(target: AgentTarget, prompt: string, opts?: RunAgentOpts): Promise<number | null>;
+export function runAgent(target: AgentTarget, prompt: string, opts?: RunAgentOpts): Promise<RunResult>; // { exitCode, costUsd? }
 ```
 
 `headless` and `permission` default to **`true`** (an autonomous loop is always headless + bypassed). The exact, test-pinned `buildArgv` outputs:
@@ -1001,7 +1001,7 @@ const verdict = gov.decide(); // { halt: boolean; reason?: string }
 `decide()` checks limits in **fixed precedence with `>=`, first breach wins**: iterations → consecutiveFailures → budget. `record("failure", …)` increments the consecutive-failure run; `record("success", …)` resets it to 0.
 
 > [!WARNING]
-> **`maxBudgetUsd` does nothing unless you feed real `costUsd`.** With the default `record(outcome)` (costUsd = 0) the spend total never grows and the budget cap never fires. If you cannot measure per-iteration spend (the Codex case), **drop `maxBudgetUsd` and govern with `maxIterations` + `timeout`**. The seam emits no `--max-budget-usd` flag (§2.7) — add it to the raw loop line yourself, or extend `AgentOpts`/`TargetFlags` (§4.5).
+> **`maxBudgetUsd` does nothing unless you feed real `costUsd`.** With the default `record(outcome)` (costUsd = 0) the spend total never grows and the budget cap never fires. If you cannot measure per-iteration spend (the Codex case — no per-call USD), **drop `maxBudgetUsd` and govern with `maxIterations` + `timeout`**. For Claude, call `runAgent(..., { json: true })` to capture `total_cost_usd` and feed `result.costUsd` to `record()` (the seam confines this per-CLI spelling to `src/seam`). The seam still emits no `--max-budget-usd` flag (§2.7).
 
 **Layered kill switches** — combine the typed primitive with OS- and shell-level brakes:
 
@@ -1102,7 +1102,7 @@ function currentPlanItemId(): string {
 const gov = new Governor({
   maxIterations: 40,
   maxConsecutiveFailures: 3,
-  // maxBudgetUsd: 20, // only effective if you pass measured costUsd to record()
+  // maxBudgetUsd: 20, // Claude-only in v0: arms only when runAgent is called with json:true (captures total_cost_usd)
 });
 
 let iteration = 0;
@@ -1117,16 +1117,16 @@ for (;;) {
   const prompt = readFileSync("PROMPT.md", "utf8");
   const start = Date.now();
 
-  // runAgent spawns: claude -p "<prompt>" --dangerously-skip-permissions --model opus --max-turns 40
-  // (buildArgv order: [headless?, prompt, permission?, --model <name>?, --max-turns <n>?])
-  const exit = await runAgent(TARGET, prompt, { model: "opus", maxTurns: 40 });
+  // runAgent spawns: claude -p "<prompt>" --dangerously-skip-permissions --model opus --max-turns 40 --output-format json
+  // json: true captures total_cost_usd from the run (Claude only — Codex has no per-call USD).
+  const result = await runAgent(TARGET, prompt, { model: "opus", maxTurns: 40, json: true });
 
   // The Stop hook (composite gate) already ran INSIDE the CLI, but the seam does
   // not surface its result — re-run the gate here to get a deterministic signal.
   const gate = spawnSync("./scripts/backpressure-gate.sh", [], { stdio: "inherit" });
-  const passed = exit === 0 && gate.status === 0;
+  const passed = result.exitCode === 0 && gate.status === 0;
 
-  gov.record(passed ? "success" : "failure"); // pass measured USD as 2nd arg to arm maxBudgetUsd
+  gov.record(passed ? "success" : "failure", result.costUsd); // costUsd arms maxBudgetUsd (Claude only)
 
   const entry: JournalEntry = {
     iteration,

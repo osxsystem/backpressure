@@ -17,6 +17,11 @@ export interface AgentOpts {
   model?: string;
   /** Cap on actions/turns. Emitted as `--max-turns <n>` where supported. */
   maxTurns?: number;
+  /**
+   * Request structured JSON output so the run's cost can be parsed. Appends the
+   * per-target tokens (`--output-format json` / `--json`) where supported.
+   */
+  json?: boolean;
 }
 
 /**
@@ -24,7 +29,7 @@ export interface AgentOpts {
  * agent run. Pure — no I/O — so the exact contract is unit-testable.
  *
  * Order is fixed and identical in shape across targets:
- *   `[<headless>, <prompt>, <permission>, --model <name>?, --max-turns <n>?]`
+ *   `[<headless>, <prompt>, <permission>, --model <name>?, --max-turns <n>?, <json-output>?]`
  *
  * For example, given `{ model: "m", maxTurns: 5 }` this yields:
  *   - claude: `["-p", prompt, "--dangerously-skip-permissions", "--model", "m", "--max-turns", "5"]`
@@ -35,7 +40,7 @@ export interface AgentOpts {
  */
 export function buildArgv(target: AgentTarget, prompt: string, opts: AgentOpts = {}): string[] {
   const flags = flagsFor(target);
-  const { headless = true, permission = true, model, maxTurns } = opts;
+  const { headless = true, permission = true, model, maxTurns, json } = opts;
 
   const argv: string[] = [];
 
@@ -48,6 +53,10 @@ export function buildArgv(target: AgentTarget, prompt: string, opts: AgentOpts =
   }
   if (maxTurns !== undefined && flags.maxTurns !== null) {
     argv.push(flags.maxTurns, String(maxTurns));
+  }
+  // Appended LAST so an existing (json-off) argv is byte-unchanged.
+  if (json && flags.jsonOutput !== null) {
+    argv.push(...flags.jsonOutput);
   }
 
   return argv;

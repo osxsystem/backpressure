@@ -46,4 +46,37 @@ describe("buildArgv", () => {
       "do the task",
     ]);
   });
+
+  it("@acceptance appends per-target json-output tokens only when json is requested", () => {
+    expect(buildArgv("claude", prompt, { json: true })).toEqual([
+      "-p",
+      "do the task",
+      "--dangerously-skip-permissions",
+      "--output-format",
+      "json",
+    ]);
+    expect(buildArgv("codex", prompt, { json: true })).toEqual([
+      "exec",
+      "do the task",
+      "--dangerously-bypass-approvals-and-sandbox",
+      "--json",
+    ]);
+    // Appended LAST (after --max-turns); a json-off argv is byte-unchanged.
+    expect(buildArgv("claude", prompt, { model: "opus", maxTurns: 40, json: true })).toEqual([
+      "-p",
+      "do the task",
+      "--dangerously-skip-permissions",
+      "--model",
+      "opus",
+      "--max-turns",
+      "40",
+      "--output-format",
+      "json",
+    ]);
+    expect(buildArgv("claude", prompt)).toEqual([
+      "-p",
+      "do the task",
+      "--dangerously-skip-permissions",
+    ]);
+  });
 });
