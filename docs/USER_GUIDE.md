@@ -108,7 +108,7 @@ backpressure <command> [options]
 | `init`   | ✅ wired | Compiles and installs capabilities into the current repo. |
 | `remove` | ✅ wired | Removes previously-installed Backpressure skills. |
 | `build`  | ✅ wired | Compiles and **previews** the per-target config (read-only; does not install). |
-| `index`  | 🚧 stub | Prints `index: not yet implemented` (reserved for v0+). |
+| `index`  | ✅ wired | Reports which Backpressure capabilities are installed in the current repo. |
 
 ### `backpressure init`
 
@@ -234,6 +234,31 @@ Staged: /tmp/preview/.codex/config.toml
 With no `--out`, `build` writes nothing — skill trees appear only as
 `// copy <path>` reference lines (skills are copied verbatim by `init`, not
 compiled). With `--out`, only the compiled **config** is staged.
+
+---
+
+### `backpressure index`
+
+Reports which Backpressure capabilities are **installed** in the current repo —
+the read-only inverse of `init`/`build`. It checks, per `planInstall`, whether
+each capability file the install *would* write actually exists, and reports
+present/absent (it checks presence, not content).
+
+| Option | Default | Meaning |
+|--------|---------|---------|
+| `--target <target>` | `claude` | Which CLI's install to inventory: `claude` or `codex`. |
+| `--json` | off | Emit a JSON array of `{ kind, path, present }` instead of the text report. |
+
+```bash
+$ backpressure index --target claude
+[x] hooks   /repo/.claude/settings.json
+[x] agent   /repo/.claude/agents/reviewer.md
+[ ] skill   /repo/.claude/skills/building-adaptive-ui/SKILL.md
+2/3 capabilities installed
+```
+
+It never writes or repairs anything (that is `init` / `remove`), and always
+exits 0 — it is a report, not a gate.
 
 ---
 
@@ -601,8 +626,8 @@ pnpm run build    # tsup -> dist/
 
 ## Known limitations (v0 notes)
 
-- **The `index` CLI command is a stub** — it prints a "not yet implemented"
-  line. (`build` is wired — it compiles/previews the per-target config.)
+- **All four CLI commands are wired** (`init`, `remove`, `build`, `index`) —
+  there are no stub subcommands in v0.
 - **The issue tracker is deferred to post-v0 and is not installed.** Its source
   (`src/core/task.ts`, `src/tracker/*`) ships in the tree and is tested, but
   `init` registers no MCP server, so no `.mcp.json` / `[mcp_servers]` table is

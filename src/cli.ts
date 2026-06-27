@@ -7,6 +7,7 @@ import commander from "commander";
 import { build, formatArtifacts } from "./install/build.js";
 import { InstallError } from "./install/errors.js";
 import { bundledSkillsDir, init } from "./install/init.js";
+import { formatInventory, inventory } from "./install/inventory.js";
 import { DEFAULT_CAPABILITIES, resolveInstalledSkills } from "./install/plan.js";
 import { remove } from "./install/remove.js";
 import type { AgentTarget } from "./seam/targets.js";
@@ -205,9 +206,22 @@ export function buildProgram(): commander.Command {
 
   program
     .command("index")
-    .description("Index the installed capabilities (stub).")
-    .action(() => {
-      process.stdout.write("index: not yet implemented\n");
+    .description("Report which Backpressure capabilities are installed in this repo.")
+    .option("--target <target>", "Which CLI's install to inventory (claude or codex).", "claude")
+    .option("--json", "Emit the inventory as a JSON array of { kind, path, present }.")
+    .action(async (options: { target: string; json?: boolean }) => {
+      try {
+        const target = parseTarget(options.target);
+        const entries = await inventory(target, { baseDir: cwd() });
+        process.stdout.write(
+          options.json ? `${JSON.stringify(entries, null, 2)}\n` : formatInventory(entries),
+        );
+      } catch (e) {
+        const line = cliErrorLine(e);
+        if (line === null) throw e;
+        process.stderr.write(`${line}\n`);
+        process.exitCode = 1;
+      }
     });
 
   return program;
