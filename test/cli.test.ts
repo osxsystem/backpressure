@@ -1,6 +1,7 @@
 import type commander from "commander";
 import { describe, expect, it } from "vitest";
 import { buildProgram, cliErrorLine } from "../src/cli.js";
+import { build, formatArtifacts } from "../src/install/build.js";
 import { MissingSkillSourceError } from "../src/install/errors.js";
 
 describe("cliErrorLine", () => {
@@ -34,6 +35,21 @@ describe("buildProgram", () => {
       (o: { long?: string; defaultValue?: unknown }) => o.long === "--gate",
     );
     expect(gate?.defaultValue).toBe("pnpm test");
+  });
+
+  it("@acceptance build registers --target/--out and is no longer a stub", () => {
+    const buildCmd = buildProgram().commands.find((c: commander.Command) => c.name() === "build");
+    const flags = buildCmd?.options.map((o: { long?: string }) => o.long);
+    expect(flags).toEqual(expect.arrayContaining(["--target", "--out"]));
+    expect(buildCmd?.description()).not.toContain("stub");
+  });
+
+  it("@acceptance build compiles per-target config and never 'not yet implemented'", async () => {
+    // The exact output the `build` action prints (asserted directly: commander 4
+    // parseAsync does not await async action handlers).
+    const printed = formatArtifacts(await build("claude"));
+    expect(printed).not.toContain("not yet implemented");
+    expect(printed).toContain("settings.json");
   });
 
   it("registers --global on init", () => {

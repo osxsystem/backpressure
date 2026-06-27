@@ -107,7 +107,7 @@ backpressure <command> [options]
 |----------|--------|--------------|
 | `init`   | ✅ wired | Compiles and installs capabilities into the current repo. |
 | `remove` | ✅ wired | Removes previously-installed Backpressure skills. |
-| `build`  | 🚧 stub | Prints `build: not yet implemented` (reserved for v0+). |
+| `build`  | ✅ wired | Compiles and **previews** the per-target config (read-only; does not install). |
 | `index`  | 🚧 stub | Prints `index: not yet implemented` (reserved for v0+). |
 
 ### `backpressure init`
@@ -201,6 +201,39 @@ Removed: /Users/me/.claude/skills/building-adaptive-ui
 $ backpressure remove --target claude --skill skill-creator
 Skipped (not installed): skill-creator
 ```
+
+---
+
+### `backpressure build`
+
+Compiles the per-target config artifacts from the single source of truth and
+**previews** them — a read-only "compile per target". It routes through the same
+compiler as `init` (so the bytes are identical), but does **not** install into a
+repo. Distinct from `pnpm run build` (tsup → `dist/`): it never runs tsup.
+
+| Option | Default | Meaning |
+|--------|---------|---------|
+| `--target <target>` | `claude` | Which CLI to compile for: `claude` or `codex`. |
+| `--out <dir>` | — | **Stage** the compiled config under `<dir>` instead of printing it. A scratch dir, never a live repo. |
+
+```bash
+# Print the compiled Claude config (settings.json + agents) to stdout:
+$ backpressure build --target claude
+// .claude/settings.json
+{ "hooks": { "Stop": [ … ] } }
+// .claude/agents/reviewer.md
+---
+name: reviewer
+…
+
+# Stage the compiled Codex config under a scratch dir:
+$ backpressure build --target codex --out /tmp/preview
+Staged: /tmp/preview/.codex/config.toml
+```
+
+With no `--out`, `build` writes nothing — skill trees appear only as
+`// copy <path>` reference lines (skills are copied verbatim by `init`, not
+compiled). With `--out`, only the compiled **config** is staged.
 
 ---
 
@@ -568,8 +601,8 @@ pnpm run build    # tsup -> dist/
 
 ## Known limitations (v0 notes)
 
-- **`build` and `index` CLI commands are stubs** — they print a "not yet
-  implemented" line.
+- **The `index` CLI command is a stub** — it prints a "not yet implemented"
+  line. (`build` is wired — it compiles/previews the per-target config.)
 - **The issue tracker is deferred to post-v0 and is not installed.** Its source
   (`src/core/task.ts`, `src/tracker/*`) ships in the tree and is tested, but
   `init` registers no MCP server, so no `.mcp.json` / `[mcp_servers]` table is
