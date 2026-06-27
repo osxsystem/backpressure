@@ -20,8 +20,18 @@ import {
   planInstall,
 } from "./plan.js";
 
-/** The default hooks Backpressure installs: a Stop-gate that runs the tests. */
-export const DEFAULT_HOOKS: HookDefinition[] = [{ event: "Stop", command: "pnpm test" }];
+/**
+ * Build the Stop-gate hook that runs `command` after each turn — the single
+ * place the gate command becomes a {@link HookDefinition}. `init`'s `gateCommand`
+ * flows through here, so a repo can point the gate at the composite
+ * `./scripts/backpressure-gate.sh` without hand-editing the emitted config.
+ */
+export function stopGateHooks(command: string): HookDefinition[] {
+  return [{ event: "Stop", command }];
+}
+
+/** The default hooks Backpressure installs: a Stop-gate that runs `pnpm test`. */
+export const DEFAULT_HOOKS: HookDefinition[] = stopGateHooks("pnpm test");
 
 /**
  * The slice of the filesystem {@link init} needs. Injectable so tests can
@@ -128,6 +138,14 @@ export interface InitOptions {
    * without affecting any project-level config.
    */
   skillsOnly?: boolean;
+  /**
+   * Command the installed Stop-gate hook runs after each turn. Defaults to
+   * `"pnpm test"`. Point it at `./scripts/backpressure-gate.sh` to install the
+   * composite gate instead of bare tests. Stays an opaque string through the
+   * installer — only the per-target adapters render it (the author-once,
+   * compile-per-target seam).
+   */
+  gateCommand?: string;
 }
 
 /** The outcome of {@link init}: the plan, and whether files were actually written. */
@@ -158,6 +176,7 @@ async function buildWrites(
   target: AgentTarget,
   plan: PlannedFile[],
   capabilities: InstallCapabilities,
+  hooks: HookDefinition[],
   skillsSourceDir: string,
   io: InstallIo,
 ): Promise<WriteOp[]> {
@@ -203,7 +222,7 @@ async function buildWrites(
         writes.push({
           op: "write",
           path: file.path,
-          contents: `${JSON.stringify(emitClaudeHooks(DEFAULT_HOOKS), null, 2)}\n`,
+          contents: `${JSON.stringify(emitClaudeHooks(hooks), null, 2)}\n`,
         });
       } else if (file.kind === "mcp") {
         writes.push({
@@ -224,7 +243,7 @@ async function buildWrites(
     // (the v0 default) rather than emitting an empty table.
     if (file.kind === "hooks") {
       const mcpServers = capabilities.mcpServers ?? [];
-      const fragments = [emitCodexHooks(DEFAULT_HOOKS)];
+      const fragments = [emitCodexHooks(hooks)];
       if (mcpServers.length > 0) fragments.push(emitCodexMcp(mcpServers));
       fragments.push(emitCodexAgents(capabilities.subagents));
       writes.push({ op: "write", path: file.path, contents: fragments.join("\n") });
@@ -255,6 +274,7 @@ export async function init(
     io = nodeInstallIo,
     skillsIo = nodeSkillsIo,
     skillsOnly = false,
+    gateCommand = "pnpm test",
   } = options;
 
   let plan = planInstall(target, repoPath, capabilities);
@@ -275,7 +295,14 @@ export async function init(
     return { plan, written: false };
   }
 
-  const writes = await buildWrites(target, plan, capabilities, skillsSourceDir, io);
+  const writes = await buildWrites(
+    target,
+    plan,
+    capabilities,
+    stopGateHooks(gateCommand),
+    skillsSourceDir,
+    io,
+  );
   for (const write of writes) {
     await io.ensureDir(dirname(write.path));
     if (write.op === "write") {

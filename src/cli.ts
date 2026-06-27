@@ -75,6 +75,11 @@ export function buildProgram(): commander.Command {
       "--global",
       "Install skills only into the user-level skills dir (~/.claude/skills or ~/.codex/skills).",
     )
+    .option(
+      "--gate <command>",
+      "Command the installed Stop-gate hook runs after each turn (default: pnpm test). Point at ./scripts/backpressure-gate.sh for the composite gate.",
+      "pnpm test",
+    )
     .action(
       async (options: {
         target: string;
@@ -82,6 +87,7 @@ export function buildProgram(): commander.Command {
         skill?: string[];
         allSkills?: boolean;
         global?: boolean;
+        gate?: string;
       }) => {
         try {
           const target = parseTarget(options.target);
@@ -97,6 +103,7 @@ export function buildProgram(): commander.Command {
             skillsSourceDir,
             capabilities: { ...DEFAULT_CAPABILITIES, skills },
             skillsOnly: options.global,
+            gateCommand: options.gate,
           });
           const verb = result.written ? "Wrote" : "Planned";
           for (const file of result.plan) {

@@ -20,9 +20,9 @@ that order.
 
 ## configurable-gate-hook (specs/configurable-gate-hook.md) — after codex-hooks
 
-- [ ] Thread an optional `gateCommand` (default `'pnpm test'`) from `init()` into `buildWrites` via a pure `stopGateHooks(cmd)` helper; redefine `DEFAULT_HOOKS = stopGateHooks('pnpm test')`; add `gateCommand?: string` to `InitOptions`; consume `stopGateHooks(gateCommand)` in BOTH the Claude and Codex branches of `buildWrites`; add the four init-side `@acceptance` tests + the `DEFAULT_HOOKS` guard in `test/install/init.test.ts` (criteria 1-4, 6).
-- [ ] Register `--gate <command>` (default `'pnpm test'`) on the **init** subcommand in `src/cli.ts` and pass `options.gate` as `gateCommand` into `init()`; add the `--gate` flag + defaultValue assertion in `test/cli.test.ts` (criterion 5). *(First `cli.ts` editor — must precede the build/index `cli.ts` edits.)*
-- [ ] Document the `--gate` flag in `docs/USER_GUIDE.md` (default `pnpm test`; point at `./scripts/backpressure-gate.sh` for the composite gate).
+- [x] Thread an optional `gateCommand` (default `'pnpm test'`) from `init()` into `buildWrites` via a pure `stopGateHooks(cmd)` helper; redefine `DEFAULT_HOOKS = stopGateHooks('pnpm test')`; add `gateCommand?: string` to `InitOptions`; consume `stopGateHooks(gateCommand)` in BOTH the Claude and Codex branches of `buildWrites`; add the four init-side `@acceptance` tests + the `DEFAULT_HOOKS` guard in `test/install/init.test.ts` (criteria 1-4, 6).
+- [x] Register `--gate <command>` (default `'pnpm test'`) on the **init** subcommand in `src/cli.ts` and pass `options.gate` as `gateCommand` into `init()`; add the `--gate` flag + defaultValue assertion in `test/cli.test.ts` (criterion 5). *(First `cli.ts` editor — must precede the build/index `cli.ts` edits.)*
+- [x] Document the `--gate` flag in `docs/USER_GUIDE.md` (default `pnpm test`; point at `./scripts/backpressure-gate.sh` for the composite gate).
 
 ## build-command (specs/build-command.md) — init.ts refactor after gate threading
 
