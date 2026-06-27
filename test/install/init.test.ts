@@ -17,7 +17,7 @@ import { parse } from "smol-toml";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { MissingSkillSourceError, SkillVerificationError } from "../../src/install/errors.js";
 import type { InstallIo } from "../../src/install/init.js";
-import { bundledSkillsDir, init } from "../../src/install/init.js";
+import { bundledSkillsDir, DEFAULT_HOOKS, init } from "../../src/install/init.js";
 import { planInstall } from "../../src/install/plan.js";
 
 // The bundled skills dir at <repoRoot>/skills, two levels up from this file.
@@ -258,6 +258,35 @@ describe("init", () => {
     await expect(
       _access(join(dir, ".claude", "skills", "building-adaptive-ui", "SKILL.md")),
     ).resolves.toBeUndefined();
+  });
+
+  it("@acceptance init('claude') with no gate keeps the Stop hook command at pnpm test", async () => {
+    await init("claude", dir, { skillsSourceDir });
+    const settings = JSON.parse(await readFile(join(dir, ".claude", "settings.json"), "utf8"));
+    expect(settings.hooks.Stop[0].hooks[0].command).toBe("pnpm test");
+  });
+
+  it("@acceptance init('codex') with no gate keeps the Stop gate command at pnpm test", async () => {
+    await init("codex", dir, { skillsSourceDir });
+    const toml = await readFile(join(dir, ".codex", "config.toml"), "utf8");
+    expect(toml).toContain("pnpm test");
+  });
+
+  it("@acceptance init('claude', { gateCommand }) points the Stop hook at the configured command", async () => {
+    await init("claude", dir, { gateCommand: "./scripts/backpressure-gate.sh", skillsSourceDir });
+    const settings = JSON.parse(await readFile(join(dir, ".claude", "settings.json"), "utf8"));
+    expect(settings.hooks.Stop[0].hooks[0].command).toBe("./scripts/backpressure-gate.sh");
+  });
+
+  it("@acceptance init('codex', { gateCommand }) points the Stop gate at the configured command", async () => {
+    // Substring match — shape-agnostic, so it survives the nested codex-hooks schema.
+    await init("codex", dir, { gateCommand: "./scripts/backpressure-gate.sh", skillsSourceDir });
+    const toml = await readFile(join(dir, ".codex", "config.toml"), "utf8");
+    expect(toml).toContain("./scripts/backpressure-gate.sh");
+  });
+
+  it("@acceptance DEFAULT_HOOKS still exports the pnpm test Stop gate", () => {
+    expect(DEFAULT_HOOKS).toEqual([{ event: "Stop", command: "pnpm test" }]);
   });
 });
 

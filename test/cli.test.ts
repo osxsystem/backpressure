@@ -28,6 +28,14 @@ describe("buildProgram", () => {
     expect(flags).toEqual(expect.arrayContaining(["--skill", "--all-skills"]));
   });
 
+  it("@acceptance init subcommand registers --gate defaulting to pnpm test", () => {
+    const initCmd = buildProgram().commands.find((c: commander.Command) => c.name() === "init");
+    const gate = initCmd?.options.find(
+      (o: { long?: string; defaultValue?: unknown }) => o.long === "--gate",
+    );
+    expect(gate?.defaultValue).toBe("pnpm test");
+  });
+
   it("registers --global on init", () => {
     const program = buildProgram();
     const initCmd = program.commands.find((c: commander.Command) => c.name() === "init");

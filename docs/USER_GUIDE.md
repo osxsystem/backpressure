@@ -119,6 +119,7 @@ backpressure <command> [options]
 | `--skill <name>` | — | Install a bundled skill **in addition** to the defaults. Repeatable (`--skill a --skill b`). An unknown name fails cleanly, listing what's available. |
 | `--all-skills` | off | Install **every** bundled skill the pack ships, not just the defaults. |
 | `--global` | off | Install skills only into the **user-level** skills dir (`~/.claude/skills` or `~/.codex/skills`). Hooks and agent files are **not** written. |
+| `--gate <command>` | `pnpm test` | Command the installed **Stop-gate hook** runs after each turn. Point it at `./scripts/backpressure-gate.sh` to install the composite gate instead of bare tests. |
 
 Behaviour:
 
