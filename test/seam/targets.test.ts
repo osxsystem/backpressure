@@ -27,7 +27,7 @@ describe("TARGET_FLAGS", () => {
     // Claude supports both --model and --max-turns.
     expect(flagsFor("claude").model).toBe("--model");
     expect(flagsFor("claude").maxTurns).toBe("--max-turns");
-    // Codex (per ralph.sh) takes --model but no max-turns flag in the headless call.
+    // Codex takes --model but no max-turns flag in the headless call.
     expect(flagsFor("codex").model).toBe("--model");
     expect(flagsFor("codex").maxTurns).toBeNull();
   });
