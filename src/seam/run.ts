@@ -94,6 +94,10 @@ export function runAgent(
   const { spawn = nodeSpawnFn, ...agentOpts } = opts;
   const command = BINARIES[target];
   const args = buildArgv(target, prompt, agentOpts);
+  // Capture (pipe) stdout only when the target reports a per-call cost (Claude).
+  // Codex passes --json (forward-looking groundwork) but has no costPath in v0,
+  // so its stdout stays inherited and costUsd is undefined — passing json:true to
+  // Codex is inert for cost capture.
   const capture = agentOpts.json === true && flagsFor(target).costPath !== null;
 
   return new Promise((resolve, reject) => {

@@ -94,6 +94,19 @@ describe("runAgent", () => {
     expect(codex.costUsd).toBeUndefined();
   });
 
+  it("@acceptance runAgent pipes stdout only when cost is capturable (claude+json yes, codex+json no)", async () => {
+    // Pins the capture guard: claude+json must capture (pipe), codex+json must
+    // NOT (costPath null) — otherwise codex's --json stdout would be piped and
+    // discarded, swallowing its terminal output.
+    const claude = fakeSpawn(0, '{"total_cost_usd":0.6}');
+    await runAgent("claude", "p", { json: true, spawn: claude.spawn });
+    expect(claude.calls[0]?.capture).toBe(true);
+
+    const codex = fakeSpawn(0, '{"total_cost_usd":0.6}');
+    await runAgent("codex", "p", { json: true, spawn: codex.spawn });
+    expect(codex.calls[0]?.capture).toBe(false);
+  });
+
   it("@acceptance parseCostUsd returns undefined for garbage, empty, missing-field, and null-costPath", () => {
     expect(parseCostUsd("not json", "claude")).toBeUndefined();
     expect(parseCostUsd("", "claude")).toBeUndefined();

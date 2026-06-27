@@ -116,4 +116,37 @@ describe("build", () => {
     const src = await readFile(join(repoRoot, "src", "install", "build.ts"), "utf8");
     expect(src).not.toMatch(/target\s*===|if\s*\(\s*target\b/);
   });
+
+  it("@acceptance formatArtifacts dumps the compiled config body, not just headers", async () => {
+    // Guards the preview command's core purpose: stdout carries the actual config
+    // bytes (a header-only output would still pass the other assertions).
+    const printed = formatArtifacts(await build("claude", { skillsSourceDir }));
+    expect(printed).toContain('"command": "pnpm test"');
+  });
+
+  it("@acceptance build writes no dist/ and never imports tsup (independent of pnpm run build)", async () => {
+    await build("claude", { skillsSourceDir, out });
+    await expect(access(join(out, "dist"))).rejects.toThrow();
+    // No tsup IMPORT/require (the doc comment may mention it to contrast).
+    const src = await readFile(join(repoRoot, "src", "install", "build.ts"), "utf8");
+    expect(src).not.toMatch(/from\s+["']tsup["']|require\(\s*["']tsup["']\s*\)/);
+  });
+
+  it('@acceptance build --out "" stays read-only (empty out never enables cwd writes)', async () => {
+    const calls: string[] = [];
+    const spy: InstallIo = {
+      listFiles: (d) => nodeInstallIo.listFiles(d),
+      async ensureDir(p) {
+        calls.push(`ensureDir:${p}`);
+      },
+      async writeText(p) {
+        calls.push(`writeText:${p}`);
+      },
+      async copyFile(_from, to) {
+        calls.push(`copyFile:${to}`);
+      },
+    };
+    await build("claude", { skillsSourceDir, io: spy, out: "" });
+    expect(calls).toEqual([]);
+  });
 });

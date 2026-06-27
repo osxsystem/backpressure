@@ -73,13 +73,27 @@ describe("inventory", () => {
     expect(entries.filter((e) => e.kind === "skill").every((e) => !e.present)).toBe(true);
   });
 
-  it("@acceptance formatInventory renders [x]/[ ] markers and an N/M summary", () => {
+  it("@acceptance formatInventory renders [x]/[ ] markers, the path, and an N/M summary", () => {
     const out = formatInventory([
       { kind: "hooks", path: "/r/.claude/settings.json", present: true },
       { kind: "skill", path: "/r/.claude/skills/x/SKILL.md", present: false },
     ]);
     expect(out).toContain("[x] hooks");
     expect(out).toContain("[ ] skill");
+    expect(out).toContain("/r/.claude/settings.json"); // each entry's path is rendered
+    expect(out).toContain("/r/.claude/skills/x/SKILL.md");
     expect(out).toContain("1/2 capabilities installed");
+  });
+
+  it("@acceptance inventory entries are the JSON shape the --json branch emits ({kind,path,present}[])", async () => {
+    await init("claude", dir, { skillsSourceDir });
+    const entries = await inventory("claude", { baseDir: dir });
+    // The CLI's `--json` branch prints JSON.stringify(entries); assert it round-trips
+    // to exactly the {kind, path, present} shape.
+    const roundTripped = JSON.parse(JSON.stringify(entries)) as CapabilityEntry[];
+    expect(roundTripped).toEqual(entries);
+    for (const e of roundTripped) {
+      expect(Object.keys(e).sort()).toEqual(["kind", "path", "present"]);
+    }
   });
 });

@@ -188,8 +188,11 @@ export function buildProgram(): commander.Command {
     .action(async (options: { target: string; out?: string }) => {
       try {
         const target = parseTarget(options.target);
-        const ops = await build(target, { out: options.out });
-        if (options.out !== undefined) {
+        // An empty/whitespace --out is a read-only preview, not staging.
+        const out =
+          options.out !== undefined && options.out.trim() !== "" ? options.out : undefined;
+        const ops = await build(target, { out });
+        if (out !== undefined) {
           for (const op of ops) {
             if (op.op === "write") process.stdout.write(`Staged: ${op.path}\n`);
           }
