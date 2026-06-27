@@ -29,6 +29,18 @@ export interface TargetFlags {
   model: string | null;
   /** The flag that caps actions/turns per run, or `null` if unsupported. */
   maxTurns: string | null;
+  /**
+   * The token(s) that switch the headless run to structured JSON output (so the
+   * end-of-run cost can be parsed), or `null` if unsupported. Claude:
+   * `["--output-format", "json"]`; Codex: `["--json"]`.
+   */
+  jsonOutput: readonly string[] | null;
+  /**
+   * The field in the JSON output carrying the run's USD cost, or `null` if the
+   * target reports no single per-call figure. Claude: `"total_cost_usd"`;
+   * Codex: `null` (no per-call USD).
+   */
+  costPath: string | null;
 }
 
 /**
@@ -43,12 +55,16 @@ export const TARGET_FLAGS: Record<AgentTarget, TargetFlags> = {
     permission: "--dangerously-skip-permissions",
     model: "--model",
     maxTurns: "--max-turns",
+    jsonOutput: ["--output-format", "json"],
+    costPath: "total_cost_usd",
   },
   codex: {
     headless: "exec",
     permission: "--dangerously-bypass-approvals-and-sandbox",
     model: "--model",
     maxTurns: null,
+    jsonOutput: ["--json"],
+    costPath: null,
   },
 };
 

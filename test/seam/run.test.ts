@@ -1,22 +1,34 @@
 import { describe, expect, it } from "vitest";
 import { buildArgv } from "../../src/seam/argv.js";
-import { runAgent, type SpawnedProcess, type SpawnFn } from "../../src/seam/run.js";
+import { parseCostUsd, runAgent, type SpawnedProcess, type SpawnFn } from "../../src/seam/run.js";
 
 /**
- * Build a fake spawn that records the command + args and fires `close` with the
- * given exit code on the next microtask, so `runAgent`'s promise resolves.
+ * A fake spawn that records command + args (+ the capture hint), optionally
+ * feeds `stdoutData` to a captured stdout stream, then fires `close` with
+ * `exitCode` on the next microtask so runAgent's promise resolves.
  */
-function fakeSpawn(exitCode: number | null) {
-  const calls: Array<{ command: string; args: string[] }> = [];
-  const spawn: SpawnFn = (command, args) => {
-    calls.push({ command, args });
-    const listeners: Record<string, (arg: number | null) => void> = {};
-    const proc: SpawnedProcess = {
+function fakeSpawn(exitCode: number | null, stdoutData?: string) {
+  const calls: Array<{ command: string; args: string[]; capture?: boolean }> = [];
+  const spawn: SpawnFn = (command, args, opts) => {
+    calls.push({ command, args, capture: opts?.capture });
+    const closeCbs: Array<(c: number | null) => void> = [];
+    const dataCbs: Array<(c: unknown) => void> = [];
+    const proc = {
       on(event: string, listener: (arg: never) => void) {
-        listeners[event] = listener as (arg: number | null) => void;
+        if (event === "close") closeCbs.push(listener as (c: number | null) => void);
       },
+      stdout: opts?.capture
+        ? {
+            on(_event: string, listener: (chunk: never) => void) {
+              dataCbs.push(listener as (c: unknown) => void);
+            },
+          }
+        : undefined,
     } as SpawnedProcess;
-    queueMicrotask(() => listeners.close?.(exitCode));
+    queueMicrotask(() => {
+      if (stdoutData !== undefined) for (const cb of dataCbs) cb(stdoutData);
+      for (const cb of closeCbs) cb(exitCode);
+    });
     return proc;
   };
   return { spawn, calls };
@@ -26,12 +38,12 @@ describe("runAgent", () => {
   it("spawns the claude binary with the argv buildArgv produced", async () => {
     const { spawn, calls } = fakeSpawn(0);
 
-    const code = await runAgent("claude", "do it", { spawn, model: "opus", maxTurns: 5 });
+    const result = await runAgent("claude", "do it", { spawn, model: "opus", maxTurns: 5 });
 
     expect(calls).toHaveLength(1);
     expect(calls[0]?.command).toBe("claude");
     expect(calls[0]?.args).toEqual(buildArgv("claude", "do it", { model: "opus", maxTurns: 5 }));
-    expect(code).toBe(0);
+    expect(result.exitCode).toBe(0);
   });
 
   it("spawns the codex binary with its argv", async () => {
@@ -43,9 +55,11 @@ describe("runAgent", () => {
     expect(calls[0]?.args).toEqual(buildArgv("codex", "do it"));
   });
 
-  it("parses and returns a non-zero exit code", async () => {
-    const { spawn } = fakeSpawn(2);
-    expect(await runAgent("claude", "boom", { spawn })).toBe(2);
+  it("@acceptance runAgent's RunResult preserves exit-code semantics with json off", async () => {
+    expect((await runAgent("claude", "ok", { spawn: fakeSpawn(0).spawn })).exitCode).toBe(0);
+    const boom = await runAgent("claude", "boom", { spawn: fakeSpawn(2).spawn });
+    expect(boom.exitCode).toBe(2);
+    expect(boom.costUsd).toBeUndefined();
   });
 
   it("rejects when the spawn errors", async () => {
@@ -61,5 +75,30 @@ describe("runAgent", () => {
     };
 
     await expect(runAgent("claude", "x", { spawn })).rejects.toThrow("ENOENT");
+  });
+
+  it("@acceptance runAgent surfaces costUsd from claude json stdout and undefined for codex", async () => {
+    const claude = await runAgent("claude", "p", {
+      json: true,
+      spawn: fakeSpawn(0, '{"total_cost_usd":0.6}').spawn,
+    });
+    expect(claude).toEqual({ exitCode: 0, costUsd: 0.6 });
+
+    // Codex passes --json but has no per-call USD figure (costPath null), so
+    // even with stdout present the cost is not captured.
+    const codex = await runAgent("codex", "p", {
+      json: true,
+      spawn: fakeSpawn(0, '{"total_cost_usd":0.6}').spawn,
+    });
+    expect(codex.exitCode).toBe(0);
+    expect(codex.costUsd).toBeUndefined();
+  });
+
+  it("@acceptance parseCostUsd returns undefined for garbage, empty, missing-field, and null-costPath", () => {
+    expect(parseCostUsd("not json", "claude")).toBeUndefined();
+    expect(parseCostUsd("", "claude")).toBeUndefined();
+    expect(parseCostUsd('{"other":1}', "claude")).toBeUndefined();
+    expect(parseCostUsd('{"total_cost_usd":"x"}', "claude")).toBeUndefined();
+    expect(parseCostUsd('{"total_cost_usd":0.6}', "codex")).toBeUndefined();
   });
 });
