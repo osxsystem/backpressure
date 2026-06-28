@@ -56,7 +56,13 @@ export async function installPack(
       }
     } else if (op.op === "copyFile") {
       await io.ensureDir(dirname(op.to));
-      await io.copyFile(op.from, op.to);
+      // TODO(phase-2): safe-join — reject "..", absolute, and symlink item paths before remote packs reuse this.
+      try {
+        await io.copyFile(op.from, op.to);
+      } catch (e) {
+        if (isEnoent(e)) throw new InvalidPackManifestError(`item source not found: ${op.from}`);
+        throw e;
+      }
       files.push(rel(op.to));
     } else {
       await io.ensureDir(dirname(op.path));

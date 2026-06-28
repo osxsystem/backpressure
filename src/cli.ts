@@ -100,6 +100,14 @@ export function buildProgram(): commander.Command {
       }) => {
         if (options.from !== undefined) {
           try {
+            if (options.global) {
+              throw new InstallError(
+                "init --from does not support --global yet — it would overwrite your global ~/.claude/settings.json. Run it inside the target repo without --global.",
+              );
+            }
+            if (options.dryRun) {
+              throw new InstallError("init --from does not support --dry-run yet.");
+            }
             const target = parseTarget(options.target);
             const baseDir = options.global ? homedir() : cwd();
             const { installed, notices } = await installPack(

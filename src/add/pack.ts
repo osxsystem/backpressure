@@ -42,6 +42,7 @@ export function planPack(
   const notices: string[] = [];
   const abs = (...p: string[]): string => join(baseDir, ...p);
 
+  // TODO(phase-2): safe-join — reject "..", absolute, and symlink item paths before remote packs reuse this.
   for (const s of manifest.scripts) {
     ops.push({
       op: "copyFile",
@@ -57,6 +58,7 @@ export function planPack(
     for (const sk of skills) {
       ops.push({
         op: "copyTree",
+        // TODO(phase-2): safe-join — reject "..", absolute, and symlink item paths before remote packs reuse this.
         from: join(packDir, sk.path),
         to: abs(".backpressure", "skills", sk.name),
       });

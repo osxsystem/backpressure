@@ -14,4 +14,8 @@ describe("rewriteScriptRefs", () => {
   it("leaves commands with no declared-script reference untouched", () => {
     expect(rewriteScriptRefs("pnpm test", ["scripts/backpressure-gate.sh"])).toBe("pnpm test");
   });
+
+  it("returns the command unchanged when the scripts array is empty", () => {
+    expect(rewriteScriptRefs("pnpm test", [])).toBe("pnpm test");
+  });
 });

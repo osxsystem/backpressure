@@ -115,4 +115,44 @@ describe("installPack (@acceptance)", () => {
       InvalidPackManifestError,
     );
   });
+
+  it("rejects InvalidPackManifestError when a command source file is missing (ENOENT on copyFile)", async () => {
+    // The manifest declares a command whose source file is NOT seeded,
+    // so io.copyFile should throw ENOENT → InvalidPackManifestError.
+    const manifestWithCommand = JSON.stringify({
+      name: "loop",
+      version: "1.0.0",
+      targets: ["claude"],
+      items: [{ type: "command", name: "my-cmd", path: "commands/my-cmd.md" }],
+      scripts: [],
+    });
+    const io: typeof import("../../src/install/init.js").nodeInstallIo & {
+      written: Map<string, string>;
+    } = {
+      written: new Map(),
+      async readText(p: string) {
+        if (p === "/pack/backpressure.json") return manifestWithCommand;
+        const e: NodeJS.ErrnoException = new Error(`ENOENT: ${p}`);
+        e.code = "ENOENT";
+        throw e;
+      },
+      async listFiles(dir: string) {
+        const e: NodeJS.ErrnoException = new Error(`ENOENT: ${dir}`);
+        e.code = "ENOENT";
+        throw e;
+      },
+      async ensureDir() {},
+      async writeText(p: string, data: string) {
+        this.written.set(p, data);
+      },
+      async copyFile(from: string, _to: string) {
+        const e: NodeJS.ErrnoException = new Error(`ENOENT: ${from}`);
+        e.code = "ENOENT";
+        throw e;
+      },
+    };
+    await expect(installPack("/pack", "claude", "/repo", io)).rejects.toThrow(
+      InvalidPackManifestError,
+    );
+  });
 });

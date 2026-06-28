@@ -10,8 +10,9 @@ export function rewriteScriptRefs(command: string, scripts: string[]): string {
   let out = command;
   for (const s of scripts) {
     const installed = `.backpressure/scripts/${basename(s)}`;
+    // Single pass is sufficient: a leading "./" is preserved because
+    // `"./x".split("x")` → `["./", ""]`, so join re-attaches the prefix.
     out = out.split(s).join(installed);
-    out = out.split(`./${s}`).join(`./${installed}`);
   }
   return out;
 }
