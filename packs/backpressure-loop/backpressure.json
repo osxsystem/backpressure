@@ -1,0 +1,10 @@
+{
+  "name": "backpressure-loop",
+  "version": "0.1.0",
+  "targets": ["claude"],
+  "items": [
+    { "type": "command", "name": "backpressure-loop", "path": "commands/backpressure-loop.md" },
+    { "type": "hook", "event": "Stop", "command": "./scripts/backpressure-gate.sh" }
+  ],
+  "scripts": ["scripts/backpressure-gate.sh"]
+}
