@@ -74,3 +74,14 @@ export function isEnoent(e: unknown): boolean {
   if (e === null || typeof e !== "object") return false;
   return (e as Record<string, unknown>).code === "ENOENT";
 }
+
+/**
+ * Thrown when a pack's `backpressure.json` is missing, not valid JSON, or fails
+ * schema validation. Carries a human message listing what's wrong.
+ */
+export class InvalidPackManifestError extends InstallError {
+  constructor(message: string) {
+    super(`invalid backpressure.json: ${message}`);
+    this.name = "InvalidPackManifestError";
+  }
+}
