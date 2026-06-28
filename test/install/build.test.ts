@@ -51,6 +51,9 @@ describe("build", () => {
     const calls: string[] = [];
     const spy: InstallIo = {
       listFiles: (d) => nodeInstallIo.listFiles(d), // reads the real skill tree
+      async readText(p) {
+        return nodeInstallIo.readText(p);
+      },
       async ensureDir(p) {
         calls.push(`ensureDir:${p}`);
       },
@@ -136,6 +139,9 @@ describe("build", () => {
     const calls: string[] = [];
     const spy: InstallIo = {
       listFiles: (d) => nodeInstallIo.listFiles(d),
+      async readText(p) {
+        return nodeInstallIo.readText(p);
+      },
       async ensureDir(p) {
         calls.push(`ensureDir:${p}`);
       },

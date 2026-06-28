@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { copyFile, mkdir, readdir, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { emitClaudeAgents } from "../adapters/claude/agents.js";
@@ -47,6 +47,8 @@ export interface InstallIo {
   listFiles(dir: string): Promise<string[]>;
   /** Create a directory (and parents) if absent. */
   ensureDir(path: string): Promise<void>;
+  /** Read a UTF-8 text file at `path`. Throws an ENOENT-coded error if absent. */
+  readText(path: string): Promise<string>;
   /** Write a UTF-8 text file at `path`. */
   writeText(path: string, data: string): Promise<void>;
   /**
@@ -78,6 +80,9 @@ export const nodeInstallIo: InstallIo = {
     };
     await walk(dir, "");
     return out;
+  },
+  async readText(path) {
+    return readFile(path, "utf8");
   },
   async ensureDir(path) {
     await mkdir(path, { recursive: true });

@@ -165,6 +165,9 @@ describe("init", () => {
         e.code = "ENOENT";
         throw e;
       },
+      async readText(_path: string): Promise<string> {
+        return "";
+      },
       async ensureDir(_path: string): Promise<void> {},
       async writeText(_path: string, _data: string): Promise<void> {},
       async copyFile(_from: string, _to: string): Promise<void> {},
