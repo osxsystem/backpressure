@@ -1,11 +1,18 @@
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { installPack } from "../../src/add/install-pack.js";
+import { InvalidPackManifestError } from "../../src/install/errors.js";
 import type { InstallIo } from "../../src/install/init.js";
 
-function fakeIo(seed: Record<string, string>) {
+function fakeIo(seed: Record<string, string>, emptyDirs: string[] = []) {
   const files = new Map<string, string>(Object.entries(seed));
   const trees = new Map<string, string[]>(); // dir -> relative file list
+  // Register explicitly-empty dirs first so listFiles can answer `[]` for them
+  // (a seeded child below would overwrite, which is fine — a dir is only empty
+  // if nothing was seeded under it).
+  for (const dir of emptyDirs) {
+    trees.set(dir, []);
+  }
   for (const p of Object.keys(seed)) {
     // register parents so listFiles can answer for a skill dir
     const parts = p.split("/");
@@ -82,5 +89,30 @@ describe("installPack (@acceptance)", () => {
   it("refuses a target the manifest does not declare", async () => {
     const io = fakeIo({ "/pack/backpressure.json": manifest });
     await expect(installPack("/pack", "codex", "/repo", io)).rejects.toThrow(/does not support/);
+  });
+
+  const skillManifest = JSON.stringify({
+    name: "loop",
+    version: "1.0.0",
+    targets: ["claude"],
+    items: [{ type: "skill", name: "loop", path: "skills/loop" }],
+    scripts: [],
+  });
+
+  it("rejects InvalidPackManifestError when an item source dir is missing (ENOENT)", async () => {
+    // Only the manifest is seeded — listFiles("/pack/skills/loop") throws ENOENT.
+    const io = fakeIo({ "/pack/backpressure.json": skillManifest });
+    await expect(installPack("/pack", "claude", "/repo", io)).rejects.toThrow(
+      InvalidPackManifestError,
+    );
+  });
+
+  it("rejects InvalidPackManifestError when an item source dir is empty", async () => {
+    // listFiles("/pack/skills/loop") returns [] (registered empty), hitting the
+    // "source is empty" guard rather than the ENOENT path.
+    const io = fakeIo({ "/pack/backpressure.json": skillManifest }, ["/pack/skills/loop"]);
+    await expect(installPack("/pack", "claude", "/repo", io)).rejects.toThrow(
+      InvalidPackManifestError,
+    );
   });
 });
