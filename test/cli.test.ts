@@ -1,3 +1,7 @@
+import { existsSync } from "node:fs";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type commander from "commander";
 import { describe, expect, it } from "vitest";
 import { buildProgram, cliErrorLine } from "../src/cli.js";
@@ -103,5 +107,50 @@ describe("buildProgram", () => {
     expect(output).toContain("build");
     expect(output).toContain("index");
     expect(output).toContain("remove");
+  });
+});
+
+describe("init --from", () => {
+  it("registers a --from option on init", () => {
+    const init = buildProgram().commands.find((c: commander.Command) => c.name() === "init");
+    expect(init?.options.some((o: { long?: string }) => o.long === "--from")).toBe(true);
+  });
+
+  it("@acceptance installs a local pack into the working dir", async () => {
+    // Build a minimal pack directory.
+    const packDir = await mkdtemp(join(tmpdir(), "bp-pack-"));
+    await mkdir(join(packDir, "commands"), { recursive: true });
+    await writeFile(
+      join(packDir, "backpressure.json"),
+      JSON.stringify({
+        name: "demo-pack",
+        version: "0.1.0",
+        targets: ["claude"],
+        items: [{ type: "command", name: "demo", path: "commands/demo.md" }],
+        scripts: [],
+      }),
+    );
+    await writeFile(join(packDir, "commands", "demo.md"), "# Demo Command\n");
+
+    // Build a temp working dir so we don't pollute the repo root.
+    const workDir = await mkdtemp(join(tmpdir(), "bp-work-"));
+    const origCwd = process.cwd();
+    try {
+      process.chdir(workDir);
+      // commander 4's parseAsync awaits async action handlers via Promise.all.
+      await buildProgram().parseAsync([
+        "node",
+        "backpressure",
+        "init",
+        "--from",
+        packDir,
+        "--target",
+        "claude",
+      ]);
+      expect(existsSync(join(workDir, ".claude", "commands", "demo.md"))).toBe(true);
+      expect(existsSync(join(workDir, ".backpressure", "installed.json"))).toBe(true);
+    } finally {
+      process.chdir(origCwd);
+    }
   });
 });

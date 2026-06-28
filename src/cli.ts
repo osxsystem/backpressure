@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 import { realpathSync } from "node:fs";
 import { homedir } from "node:os";
+import { join, resolve } from "node:path";
 import { argv, cwd } from "node:process";
 import { fileURLToPath } from "node:url";
 import commander from "commander";
+import { installPack } from "./add/install-pack.js";
 import { build, formatArtifacts } from "./install/build.js";
 import { InstallError } from "./install/errors.js";
 import { bundledSkillsDir, init } from "./install/init.js";
@@ -82,6 +84,10 @@ export function buildProgram(): commander.Command {
       "Command the installed Stop-gate hook runs after each turn (default: pnpm test). Point at ./scripts/backpressure-gate.sh for the composite gate.",
       "pnpm test",
     )
+    .option(
+      "--from <dir>",
+      "Install a local capability pack (a dir with backpressure.json) instead of the bundled defaults.",
+    )
     .action(
       async (options: {
         target: string;
@@ -90,7 +96,27 @@ export function buildProgram(): commander.Command {
         allSkills?: boolean;
         global?: boolean;
         gate?: string;
+        from?: string;
       }) => {
+        if (options.from !== undefined) {
+          try {
+            const target = parseTarget(options.target);
+            const baseDir = options.global ? homedir() : cwd();
+            const { installed, notices } = await installPack(
+              resolve(options.from),
+              target,
+              baseDir,
+            );
+            for (const f of installed.files) process.stdout.write(`Wrote: ${join(baseDir, f)}\n`);
+            for (const n of notices) process.stdout.write(`Note: ${n}\n`);
+          } catch (e) {
+            const line = cliErrorLine(e);
+            if (line === null) throw e;
+            process.stderr.write(`${line}\n`);
+            process.exitCode = 1;
+          }
+          return;
+        }
         try {
           const target = parseTarget(options.target);
           const skillsSourceDir = bundledSkillsDir();
