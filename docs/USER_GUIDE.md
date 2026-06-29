@@ -176,7 +176,7 @@ The pack ships with the installed package, so point `--from` at it inside
 `node_modules`:
 
 ```bash
-backpressure init --from node_modules/backpressure/packs/backpressure-loop --target claude
+backpressure init --from node_modules/@osxsystem/backpressure/packs/backpressure-loop --target claude
 ```
 
 This writes the pack's files to their installed locations — commands under

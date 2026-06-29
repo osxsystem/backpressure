@@ -39,7 +39,7 @@ describe("addPack (@acceptance)", () => {
     expect(sha).toBe(SHA);
     expect(written).toContain(".claude/commands/demo.md");
     const lock = JSON.parse(await readFile(join(base, ".backpressure/backpressure.lock"), "utf8"));
-    expect(lock).toMatchObject({ source: "o/demo", sha: SHA });
+    expect(lock).toMatchObject({ source: "o/demo", sha: SHA, ref: "default" });
     await expect(stat(join(base, ".claude/commands/demo.md"))).resolves.toBeDefined();
   });
 });

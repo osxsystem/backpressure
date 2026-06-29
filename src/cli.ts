@@ -302,7 +302,7 @@ export function buildProgram(): commander.Command {
         );
         for (const f of files) process.stdout.write(`Wrote: ${join(baseDir, f)}\n`);
         for (const n of notices) process.stdout.write(`Note: ${n}\n`);
-        process.stdout.write(`pinned ${ref}@${sha}\n`);
+        process.stdout.write(`pinned ${ref.split("@")[0]}@${sha}\n`);
       } catch (e) {
         const line = cliErrorLine(e);
         if (line === null) throw e;

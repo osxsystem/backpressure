@@ -43,33 +43,43 @@ function authHeaders(): Record<string, string> {
   };
 }
 
+/**
+ * Build a status-aware {@link PackFetchError} for GitHub API responses.
+ * 403 → rate-limit / token hint; 404 → not-found / private hint; else → generic.
+ */
+function ghError(status: number, what: string): PackFetchError {
+  if (status === 403)
+    return new PackFetchError(
+      "GitHub access denied (403) — rate limit, or set GITHUB_TOKEN with repo scope for a private repo.",
+    );
+  if (status === 404)
+    return new PackFetchError(
+      `${what} not found, or private repo — set GITHUB_TOKEN with repo scope to access private repos.`,
+    );
+  return new PackFetchError(`${what} (${status}).`);
+}
+
 export const nodePackFetcher: PackFetcher = {
   async resolveSha(ref) {
     const r = ref.ref ?? (await defaultBranch(ref));
     const res = await fetch(`${GH_API}/repos/${ref.owner}/${ref.repo}/commits/${r}`, {
       headers: { ...authHeaders(), accept: "application/vnd.github.sha" },
     });
-    if (res.status === 403)
-      throw new PackFetchError(
-        "GitHub access denied (403) — rate limit, or set GITHUB_TOKEN with repo scope for a private repo.",
-      );
-    if (!res.ok)
-      throw new PackFetchError(`cannot resolve ${ref.owner}/${ref.repo}@${r} (${res.status}).`);
+    if (!res.ok) throw ghError(res.status, `cannot resolve ${ref.owner}/${ref.repo}@${r}`);
     return (await res.text()).trim();
   },
   async downloadTarball(ref, sha) {
     const res = await fetch(`${CODELOAD}/${ref.owner}/${ref.repo}/tar.gz/${sha}`, {
       headers: authHeaders(),
     });
-    if (!res.ok)
-      throw new PackFetchError(`cannot download ${ref.owner}/${ref.repo}@${sha} (${res.status}).`);
+    if (!res.ok) throw ghError(res.status, `cannot download ${ref.owner}/${ref.repo}@${sha}`);
     return new Uint8Array(await res.arrayBuffer());
   },
 };
 
 async function defaultBranch(ref: PackRef): Promise<string> {
   const res = await fetch(`${GH_API}/repos/${ref.owner}/${ref.repo}`, { headers: authHeaders() });
-  if (!res.ok) throw new PackFetchError(`cannot read ${ref.owner}/${ref.repo} (${res.status}).`);
+  if (!res.ok) throw ghError(res.status, `cannot read ${ref.owner}/${ref.repo}`);
   return ((await res.json()) as { default_branch: string }).default_branch;
 }
 

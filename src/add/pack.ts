@@ -6,6 +6,7 @@ import { emitCodexAgents } from "../adapters/codex/agents.js";
 import { emitCodexHooks } from "../adapters/codex/hooks.js";
 import { emitCodexMcp } from "../adapters/codex/mcp.js";
 import type { PackItem, PackManifest } from "./manifest.js";
+import { safeResolve } from "./safejoin.js";
 import { rewriteScriptRefs } from "./scripts.js";
 
 /** Which CLI the user is installing for; "other" = portable content only. */
@@ -31,6 +32,10 @@ const byType = <T extends PackItem["type"]>(items: PackItem[], type: T) =>
  * Pure — the emitters it calls are pure and it performs no I/O. `skill`/`command`
  * become file copies from `packDir`; `agent`/`hook`/`mcp` are compiled per target
  * via the existing adapters; `scripts` always land under `.backpressure/scripts/`.
+ *
+ * All manifest-derived source and destination paths are validated via
+ * {@link safeResolve} to prevent path-traversal (a hostile pack cannot write
+ * outside `packDir` or `baseDir`).
  */
 export function planPack(
   packDir: string,
@@ -42,12 +47,11 @@ export function planPack(
   const notices: string[] = [];
   const abs = (...p: string[]): string => join(baseDir, ...p);
 
-  // TODO(phase-2): safe-join — reject "..", absolute, and symlink item paths before remote packs reuse this.
   for (const s of manifest.scripts) {
     ops.push({
       op: "copyFile",
-      from: join(packDir, s),
-      to: abs(".backpressure", "scripts", basename(s)),
+      from: safeResolve(packDir, s),
+      to: safeResolve(join(baseDir, ".backpressure", "scripts"), basename(s)),
     });
   }
 
@@ -58,9 +62,8 @@ export function planPack(
     for (const sk of skills) {
       ops.push({
         op: "copyTree",
-        // TODO(phase-2): safe-join — reject "..", absolute, and symlink item paths before remote packs reuse this.
-        from: join(packDir, sk.path),
-        to: abs(".backpressure", "skills", sk.name),
+        from: safeResolve(packDir, sk.path),
+        to: safeResolve(join(baseDir, ".backpressure", "skills"), sk.name),
       });
     }
     for (const c of commands)
@@ -75,8 +78,8 @@ export function planPack(
   for (const sk of skills) {
     ops.push({
       op: "copyTree",
-      from: join(packDir, sk.path),
-      to: abs(configDir, "skills", sk.name),
+      from: safeResolve(packDir, sk.path),
+      to: safeResolve(join(baseDir, configDir, "skills"), sk.name),
     });
   }
 
@@ -102,8 +105,8 @@ export function planPack(
     for (const c of commands) {
       ops.push({
         op: "copyFile",
-        from: join(packDir, c.path),
-        to: abs(".claude", "commands", `${c.name}.md`),
+        from: safeResolve(packDir, c.path),
+        to: safeResolve(join(baseDir, ".claude", "commands"), `${c.name}.md`),
       });
     }
     if (hookDefs.length > 0) {
