@@ -3,9 +3,16 @@
 - **Severity:** Medium (undercuts the core "the gate must gate" thesis)
 - **Area:** `src/install/init.ts` (`DEFAULT_HOOKS`)
 - **Found by:** consumer install into a plain repo (no `packageManager`, no `test` script)
-- **Status:** ◐ **PARTIALLY RESOLVED** — `init --gate <command>` makes the Stop-gate
-  command configurable (default still `pnpm test`). The stretch goal — auto-detect
-  the package manager / warn when the target has no `test` script — remains open.
+- **Status:** ◐ **MOSTLY RESOLVED** — `init --gate <command>` makes the Stop-gate
+  command configurable (default still `pnpm test`), and `init` now **warns** (a
+  `backpressure: no 'test' script found …` line on stderr, also under `--dry-run`)
+  when the gate is a `<pm> test` invocation but the target repo has no `scripts.test`
+  — the "minimum viable" acceptance below. See `isPackageTestGate` /
+  `InitResult.warnings` in `src/install/init.ts`; covered by the four `@acceptance`
+  warning tests in `test/install/init.test.ts`. The remaining **stretch** goal —
+  auto-detect the package manager (pnpm/npm/yarn lockfile) and emit the matching
+  `<pm> test` command — is open; it needs reworking the `--gate` default plumbing
+  (commander 4 can't distinguish an explicit `--gate pnpm test` from the default).
 
 ## Problem
 The test-gate is the whole point of "backpressure," so installing a Stop hook by

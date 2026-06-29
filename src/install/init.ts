@@ -34,6 +34,39 @@ export function stopGateHooks(command: string): HookDefinition[] {
 export const DEFAULT_HOOKS: HookDefinition[] = stopGateHooks("pnpm test");
 
 /**
+ * True when `command` is a bare package-manager `test` invocation (e.g.
+ * `pnpm test`, `npm run test`, `yarn test`). Such a gate depends on the target
+ * repo having a `scripts.test` — so when the repo has none, the Stop gate
+ * silently no-ops/errors and {@link init} warns. A custom `--gate` (a script
+ * path, a build command) does not match, so it is never second-guessed.
+ */
+export function isPackageTestGate(command: string): boolean {
+  return /^(pnpm|npm|yarn|bun)(\s+run)?\s+test$/.test(command.trim());
+}
+
+/**
+ * Whether the target repo at `repoPath` declares a non-empty `scripts.test` in
+ * its `package.json`. A missing or unparseable `package.json` counts as "no test
+ * script". Reads through the injected {@link InstallIo} so it stays unit-testable
+ * and never throws — the result is advisory only.
+ */
+async function targetHasTestScript(repoPath: string, io: InstallIo): Promise<boolean> {
+  let raw: string;
+  try {
+    raw = await io.readText(join(repoPath, "package.json"));
+  } catch {
+    return false; // absent (ENOENT) or unreadable → treat as no test script
+  }
+  try {
+    const pkg = JSON.parse(raw) as { scripts?: Record<string, unknown> };
+    const test = pkg.scripts?.test;
+    return typeof test === "string" && test.trim() !== "";
+  } catch {
+    return false; // unparseable package.json → treat as no test script
+  }
+}
+
+/**
  * The slice of the filesystem {@link init} needs. Injectable so tests can
  * supply an in-memory fake (and assert dry-run touches nothing) instead of
  * writing to disk.
@@ -159,6 +192,12 @@ export interface InitResult {
   plan: PlannedFile[];
   /** True if files were written to disk; false for a dry run. */
   written: boolean;
+  /**
+   * Non-fatal advisories for the caller to surface (e.g. the installed Stop gate
+   * runs a package `test` script the target repo doesn't define). Reported for a
+   * dry run too, so dry-run and the real run agree. Empty when nothing is amiss.
+   */
+  warnings: string[];
 }
 
 /**
@@ -298,8 +337,19 @@ export async function init(
     throw new SkillVerificationError(problems);
   }
 
+  // Advise when the installed Stop gate runs a package `test` script the target
+  // repo doesn't define — the gate would silently no-op/error on every Stop.
+  // Skipped under `skillsOnly` (no Stop hook is installed) and when the gate is
+  // a custom command (not a `<pm> test` invocation). Computed for dry runs too.
+  const warnings: string[] = [];
+  if (!skillsOnly && isPackageTestGate(gateCommand) && !(await targetHasTestScript(repoPath, io))) {
+    warnings.push(
+      `no 'test' script found in the target package.json — the Stop gate (\`${gateCommand}\`) will not run. Pass --gate <command> to point it at your test or build command.`,
+    );
+  }
+
   if (dryRun) {
-    return { plan, written: false };
+    return { plan, written: false, warnings };
   }
 
   const writes = await compileArtifacts(
@@ -319,5 +369,5 @@ export async function init(
     }
   }
 
-  return { plan, written: true };
+  return { plan, written: true, warnings };
 }

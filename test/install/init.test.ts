@@ -291,6 +291,40 @@ describe("init", () => {
   it("@acceptance DEFAULT_HOOKS still exports the pnpm test Stop gate", () => {
     expect(DEFAULT_HOOKS).toEqual([{ event: "Stop", command: "pnpm test" }]);
   });
+
+  it("@acceptance warns when the target repo has no test script and the default gate is used", async () => {
+    // A package.json without `scripts.test` → the default `pnpm test` Stop gate
+    // would no-op/error on every Stop, so init must flag it (issue #005).
+    await writeFile(join(dir, "package.json"), JSON.stringify({ name: "x" }));
+    const result = await init("claude", dir, { skillsSourceDir });
+    expect(result.warnings.some((w) => /no 'test' script found/.test(w))).toBe(true);
+  });
+
+  it("does not warn when the target package.json has a test script", async () => {
+    await writeFile(
+      join(dir, "package.json"),
+      JSON.stringify({ name: "x", scripts: { test: "vitest run" } }),
+    );
+    const result = await init("claude", dir, { skillsSourceDir });
+    expect(result.warnings).toEqual([]);
+  });
+
+  it("does not warn about a missing test script when --gate points at a non-test command", async () => {
+    // The user pointed the gate at their own command, so a missing `test` script
+    // is irrelevant — no warning.
+    await writeFile(join(dir, "package.json"), JSON.stringify({ name: "x" }));
+    const result = await init("claude", dir, {
+      gateCommand: "./scripts/backpressure-gate.sh",
+      skillsSourceDir,
+    });
+    expect(result.warnings).toEqual([]);
+  });
+
+  it("does not warn under --global (skills only, no Stop gate is installed)", async () => {
+    await writeFile(join(dir, "package.json"), JSON.stringify({ name: "x" }));
+    const result = await init("claude", dir, { skillsOnly: true, skillsSourceDir });
+    expect(result.warnings).toEqual([]);
+  });
 });
 
 describe("bundledSkillsDir", () => {

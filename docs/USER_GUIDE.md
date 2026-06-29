@@ -139,6 +139,13 @@ Behaviour:
   nothing is written if any skill fails validation.
 - On success prints one line per file: `Wrote: <path>` (or `Planned: <path>` for
   a dry run).
+- If the Stop gate is a package `test` script (the default `pnpm test`, or any
+  `<pm> test`) but the target repo's `package.json` declares no `scripts.test`,
+  `init` prints an advisory to stderr — `backpressure: no 'test' script found …`
+  — so the gate doesn't silently no-op. Pass `--gate <command>` to point it at a
+  command that exists, or add a `test` script. (Custom `--gate` commands and
+  `--global` installs, which write no Stop hook, are never flagged.) The advisory
+  is also reported under `--dry-run`.
 
 ```bash
 $ backpressure init --target claude

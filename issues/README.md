@@ -14,10 +14,11 @@ moot in v0 (the tracker is deferred, so no MCP is registered); 005 is mitigated 
 | [002](002-init-should-bundle-its-own-skills.md) | High | ✅ resolved | `init` requires the consumer to supply `skills/`; it should bundle its own |
 | [003](003-dry-run-greenlights-a-run-that-will-crash.md) | Medium | ✅ resolved | `--dry-run` plans files the real run can't produce (false green light) |
 | [004](004-tracker-mcp-registration-relative-path.md) | High | ⏸️ moot in v0 | Default tracker MCP registration uses a relative path → dead in every consumer repo |
-| [005](005-stop-hook-hardcodes-pnpm-test.md) | Medium | ◐ partial | Default Stop hook hardcodes `pnpm test`, no-ops/errors in repos without it |
+| [005](005-stop-hook-hardcodes-pnpm-test.md) | Medium | ◐ mostly | Default Stop hook hardcodes `pnpm test`, no-ops/errors in repos without it |
 | [006](006-backpressure-loop-pack-assumed-source-repo.md) | High | ✅ resolved | `/backpressure-loop` pack was written for the source repo, broken when installed |
 
 ## Remaining open work
-- **005** — auto-detect the package manager / warn when the target has no `test`
-  script (the `--gate` flag is the current mitigation).
+- **005** — the "warn when the target has no `test` script" MVP has landed; the
+  remaining open piece is the stretch goal: auto-detect the package manager
+  (pnpm/npm/yarn lockfile) and emit the matching `<pm> test` command.
 - **004** — revisit only if/when the tracker is wired up post-v0.

@@ -164,6 +164,9 @@ export function buildProgram(): commander.Command {
           for (const file of result.plan) {
             process.stdout.write(`${verb}: ${file.path}\n`);
           }
+          for (const w of result.warnings) {
+            process.stderr.write(`backpressure: ${w}\n`);
+          }
         } catch (e) {
           const line = cliErrorLine(e);
           if (line === null) throw e;
