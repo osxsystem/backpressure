@@ -3,12 +3,15 @@ import { realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { argv, cwd } from "node:process";
+import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
 import commander from "commander";
+import { addPack } from "./add/add.js";
+import { nodeBytesIo, nodePackFetcher } from "./add/fetch.js";
 import { installPack } from "./add/install-pack.js";
 import { build, formatArtifacts } from "./install/build.js";
 import { InstallError } from "./install/errors.js";
-import { bundledSkillsDir, init } from "./install/init.js";
+import { bundledSkillsDir, init, nodeInstallIo } from "./install/init.js";
 import { formatInventory, inventory } from "./install/inventory.js";
 import { DEFAULT_CAPABILITIES, resolveInstalledSkills } from "./install/plan.js";
 import { remove } from "./install/remove.js";
@@ -51,6 +54,18 @@ export function parseTarget(value: string): AgentTarget {
     return value as AgentTarget;
   }
   throw new InstallError(`unknown target "${value}". Expected one of: ${TARGETS.join(", ")}.`);
+}
+
+/** Read a y/N confirmation from stdin (used by `add`'s trust gate). */
+async function ttyConfirm(summary: string): Promise<boolean> {
+  process.stdout.write(`${summary}\n`);
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    const a = (await rl.question("Proceed? [y/N] ")).trim().toLowerCase();
+    return a === "y" || a === "yes";
+  } finally {
+    rl.close();
+  }
 }
 
 /**
@@ -257,6 +272,37 @@ export function buildProgram(): commander.Command {
         process.stdout.write(
           options.json ? `${JSON.stringify(entries, null, 2)}\n` : formatInventory(entries),
         );
+      } catch (e) {
+        const line = cliErrorLine(e);
+        if (line === null) throw e;
+        process.stderr.write(`${line}\n`);
+        process.exitCode = 1;
+      }
+    });
+
+  program
+    .command("add <owner/repo>")
+    .description("Install a capability pack from a GitHub repo into this repo.")
+    .option("--target <target>", "Which CLI to compile for (claude or codex).", "claude")
+    .option("--global", "Install into the user-level dirs (~/.claude or ~/.codex).")
+    .option("--yes", "Skip the trust confirmation prompt (for CI).")
+    .action(async (ref: string, options: { target: string; global?: boolean; yes?: boolean }) => {
+      try {
+        const choice = parseTarget(options.target);
+        const baseDir = options.global ? homedir() : cwd();
+        const { files, sha, notices } = await addPack(
+          ref,
+          { choice, baseDir, yes: options.yes },
+          {
+            io: nodeInstallIo,
+            bytesIo: nodeBytesIo,
+            fetcher: nodePackFetcher,
+            prompter: { confirm: ttyConfirm },
+          },
+        );
+        for (const f of files) process.stdout.write(`Wrote: ${join(baseDir, f)}\n`);
+        for (const n of notices) process.stdout.write(`Note: ${n}\n`);
+        process.stdout.write(`pinned ${ref}@${sha}\n`);
       } catch (e) {
         const line = cliErrorLine(e);
         if (line === null) throw e;

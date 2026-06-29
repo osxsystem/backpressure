@@ -128,6 +128,16 @@ describe("buildProgram", () => {
   });
 });
 
+describe("add subcommand", () => {
+  it("@acceptance registers add with --target/--global/--yes and is not a stub", () => {
+    const add = buildProgram().commands.find((c: commander.Command) => c.name() === "add");
+    expect(add).toBeDefined();
+    const flags = add?.options.map((o: { long?: string }) => o.long);
+    expect(flags).toEqual(expect.arrayContaining(["--target", "--global", "--yes"]));
+    expect(add?.description().toLowerCase()).not.toContain("not yet implemented");
+  });
+});
+
 describe("init --from", () => {
   it("registers a --from option on init", () => {
     const init = buildProgram().commands.find((c: commander.Command) => c.name() === "init");
