@@ -93,3 +93,11 @@ export class InvalidPackRefError extends InstallError {
     this.name = "InvalidPackRefError";
   }
 }
+
+/** Thrown when a fetched tar entry would escape the extraction root (zip-slip). */
+export class UnsafePackEntryError extends InstallError {
+  constructor(entry: string) {
+    super(`refusing unsafe pack entry "${entry}" (path traversal).`);
+    this.name = "UnsafePackEntryError";
+  }
+}
