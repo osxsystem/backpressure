@@ -4,7 +4,8 @@
   "private": true,
   "files": [
     "dist",
-    "skills"
+    "skills",
+    "packs"
   ],
   "type": "module",
   "description": "A capability pack for agentic coding CLIs (Claude Code and Codex CLI).",

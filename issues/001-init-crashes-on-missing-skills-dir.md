@@ -3,6 +3,9 @@
 - **Severity:** High (first command a new user runs; fails ugly)
 - **Area:** `src/install/init.ts` (`buildWrites`), `src/cli.ts`
 - **Found by:** consumer dry-run (equipping a repo that isn't this one)
+- **Status:** ✅ **RESOLVED** — `init` sources skills from the package itself via
+  `bundledSkillsDir()` (and `skills` ships in `package.json` `files`), so a target
+  repo with no `skills/` installs cleanly. Covered by `test/e2e/smoke.test.ts`.
 
 ## Problem
 The Quickstart says to run `init` "from the repo you want to equip." A normal

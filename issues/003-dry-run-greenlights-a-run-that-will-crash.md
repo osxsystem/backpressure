@@ -3,6 +3,9 @@
 - **Severity:** Medium (erodes trust in the safest-looking command)
 - **Area:** `src/install/plan.ts` (`planInstall`), `src/install/init.ts`
 - **Found by:** consumer dry-run vs real run on the same repo
+- **Status:** ✅ **RESOLVED** — the common path no longer crashes (see #002), and the
+  pre-install verify gate (`verifySkills`) runs for `--dry-run` too, so dry-run and
+  the real run agree on success/failure. See USER_GUIDE "Pre-install verify gate".
 
 ## Problem
 `init --target claude --dry-run` happily prints

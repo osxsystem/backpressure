@@ -158,6 +158,44 @@ Wrote: /Users/me/.claude/skills/building-adaptive-ui/SKILL.md
 > `--skill <name>` / `--all-skills`, or add its name to `DEFAULT_CAPABILITIES`
 > in `src/install/plan.ts` to make it part of the default set.
 
+#### Installing a capability pack — `init --from <dir>`
+
+A **capability pack** is a self-contained directory with a `backpressure.json`
+manifest plus the files it ships (commands, hooks, scripts, skills). `init --from`
+installs one into the current repo instead of the bundled defaults. This is how you
+install the **`/backpressure-loop`** launcher, which ships as the pack at
+`packs/backpressure-loop/`.
+
+```bash
+# from the repo you want to equip
+backpressure init --from <path-to-pack> --target claude
+```
+
+The pack ships with the installed package, so point `--from` at it inside
+`node_modules`:
+
+```bash
+backpressure init --from node_modules/backpressure/packs/backpressure-loop --target claude
+```
+
+This writes the pack's files to their installed locations — commands under
+`.claude/commands/`, scripts under `.backpressure/scripts/` — wires any hooks the
+manifest declares (e.g. the Stop-gate), and records what it installed in
+`.backpressure/installed.json`.
+
+| Option | Meaning |
+|--------|---------|
+| `--from <dir>` | The pack directory to install (must contain `backpressure.json`). |
+| `--target <target>` | `claude` or `codex` (the manifest must list the target). |
+
+`--from` does **not** support `--global` (it would overwrite your user-level
+`~/.claude/settings.json`) or `--dry-run` yet; run it inside the target repo.
+
+> After installing `/backpressure-loop`, run the command in a Claude Code session
+> from a **throwaway branch** to plan and scaffold an autonomous loop. It is a
+> launcher: it plans + wires the rails, then prints a sandboxed hand-off line and
+> stops — it never runs the unattended loop on your host.
+
 ---
 
 ### `backpressure remove`

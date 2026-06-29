@@ -3,6 +3,9 @@
 - **Severity:** High (makes the default install unusable without copying repo internals)
 - **Area:** `src/install/init.ts`, `src/install/plan.ts` (`skillsSourceDir`)
 - **Found by:** consumer install (the only documented fix was `cp -R backpressure/skills ./skills`)
+- **Status:** ✅ **RESOLVED** — `bundledSkillsDir()` resolves the pack's own `skills/`
+  independent of cwd, and `package.json` `files` includes `skills` so it ships with
+  the package. See `src/install/init.ts`; proven by `test/e2e/smoke.test.ts`.
 
 ## Problem
 `init` reads bundled skills from `<cwd>/skills/`. When equipping a real project,

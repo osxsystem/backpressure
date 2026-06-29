@@ -3,6 +3,10 @@
 - **Severity:** High (the headline feature ships non-functional by default)
 - **Area:** `src/install/init.ts` (`DEFAULT_MCP_SERVERS`), `src/adapters/*/*Mcp`
 - **Found by:** inspecting the emitted `.mcp.json` / `.codex/config.toml` from a consumer repo
+- **Status:** ⏸️ **MOOT in v0** — the tracker is deferred and no MCP server is
+  registered, so `init` emits no `.mcp.json` / `[mcp_servers]` table and the defect
+  cannot trigger (confirmed by `test/e2e/smoke.test.ts`). Re-open if/when the
+  tracker is wired up post-v0.
 
 ## Problem
 `init` registers the tracker server as:
