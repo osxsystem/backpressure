@@ -49,7 +49,10 @@ export const nodePackFetcher: PackFetcher = {
     const res = await fetch(`${GH_API}/repos/${ref.owner}/${ref.repo}/commits/${r}`, {
       headers: { ...authHeaders(), accept: "application/vnd.github.sha" },
     });
-    if (res.status === 403) throw new PackFetchError("GitHub rate limit — set GITHUB_TOKEN.");
+    if (res.status === 403)
+      throw new PackFetchError(
+        "GitHub access denied (403) — rate limit, or set GITHUB_TOKEN with repo scope for a private repo.",
+      );
     if (!res.ok)
       throw new PackFetchError(`cannot resolve ${ref.owner}/${ref.repo}@${r} (${res.status}).`);
     return (await res.text()).trim();

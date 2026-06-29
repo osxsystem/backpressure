@@ -1,9 +1,11 @@
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { createTarGzip } from "nanotar";
 import { describe, expect, it } from "vitest";
 import type { PackFetcher } from "../../src/add/fetch.js";
 import { fetchPack, nodeBytesIo } from "../../src/add/fetch.js";
+import { safeResolve } from "../../src/add/safejoin.js";
+import { UnsafePackEntryError } from "../../src/install/errors.js";
 
 // GitHub tarballs wrap everything in a top-level "<repo>-<sha>/" dir.
 // NOTE: nanotar's TarFileAttrs.mode is a string (e.g. "755"), not a number.
@@ -29,5 +31,17 @@ describe("fetchPack", () => {
     expect(pinned).toBe(sha);
     expect(await readFile(join(dir, "backpressure.json"), "utf8")).toContain('"name":"p"');
     expect(await readFile(join(dir, "scripts/gate.sh"), "utf8")).toContain("#!/bin/sh");
+    const { mode } = await stat(join(dir, "scripts/gate.sh"));
+    expect(mode & 0o111).toBeGreaterThan(0); // at least one exec bit set
+  });
+
+  it("rejects a zip-slip entry via safeResolve", () => {
+    const root = "/tmp/test-pack";
+    // Verify that safeResolve rejects entries with .. traversal
+    expect(() => safeResolve(root, "../../../escape.sh")).toThrow(UnsafePackEntryError);
+    // Also reject absolute paths
+    expect(() => safeResolve(root, "/etc/passwd")).toThrow(UnsafePackEntryError);
+    // But allow legitimate relative paths
+    expect(() => safeResolve(root, "subdir/file.txt")).not.toThrow();
   });
 });
