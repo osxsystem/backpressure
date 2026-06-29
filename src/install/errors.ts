@@ -101,3 +101,11 @@ export class UnsafePackEntryError extends InstallError {
     this.name = "UnsafePackEntryError";
   }
 }
+
+/** Thrown when fetching a pack from GitHub fails (network, 404, 403, private). */
+export class PackFetchError extends InstallError {
+  constructor(message: string) {
+    super(message);
+    this.name = "PackFetchError";
+  }
+}
