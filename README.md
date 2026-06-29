@@ -43,9 +43,85 @@ Full CLI reference, what `init` installs, and the library API are in the
 
 ## Running an autonomous loop
 
-Backpressure no longer ships a bundled loop runner. The loop, context management,
-and sandboxing are the CLI's job — drive the autonomous build loop with Claude
-Code's built-in `/loop` (or your own harness) against a throwaway git worktree.
-The tested TypeScript building blocks (`loop/governor.ts`, `loop/journal.ts`) and
-the headless-invocation seam (`seam/run.ts`) remain for assembling your own; see
-the [User Guide](docs/USER_GUIDE.md#loop-building-blocks).
+Backpressure isn't a runtime — the loop, context management, and sandboxing stay
+with the CLI. What this repo adds is **`/backpressure-loop`**, a launcher command
+(`.claude/commands/backpressure-loop.md`) that plans the campaign, wires
+Backpressure's composite gate into the CLI's loop, and hands off to a sandboxed
+harness (`scripts/ralph-loop.sh`). It runs in **two planes split by the sandbox
+boundary**: planning happens live on your host; the loop itself runs *unattended*
+inside a container.
+
+```text
+  HOST · your live Claude Code session ─ nothing dangerous runs here yet
+ ┌──────────────────────────────────────────────────────────────────────────┐
+ │  you ▸  /backpressure-loop "add OAuth login with refresh-token rotation"   │
+ │                                                                            │
+ │  Phase 0 · SAFETY FLOOR                                                     │
+ │    on a throwaway worktree?  tree clean?                                    │
+ │      └─ no ▸ STOP → git worktree add ../bp-loop -b ralph/auto && cd ../…    │
+ │                                                                            │
+ │  Phase 1 · PLAN — runs ONCE ────────────────► writes the 4 memory files:   │
+ │    specs/*.md   what to build · acceptance criteria · WHY (anti-amnesia)   │
+ │    fix_plan.md  ordered  - [ ]  checklist, smallest-shippable first        │
+ │    PROMPT.md    standing orders, re-read at the top of every loop          │
+ │    CLAUDE.md    how to build / run / test                                  │
+ │      └─ git commit  "plan: specs + fix_plan baseline"                       │
+ │                                                                            │
+ │  Phase 2 · WIRE THE RAILS                                                   │
+ │    chmod +x scripts/*          tune backpressure-gate.sh to your stack     │
+ │    backpressure init           Stop hook ▸ ./scripts/backpressure-gate.sh  │
+ │    add "test:acceptance"       git commit  "rails"                          │
+ │                                                                            │
+ │  Phase 3 · HAND OFF — PRINTS the launch line, then STOPS.                   │
+ │            (the command never runs the loop on your host)                   │
+ └───────────────────────────────────┬────────────────────────────────────────┘
+                                      │  you run the printed launch line
+                                      ▼
+ ═══════ SANDBOX BOUNDARY · Docker container + default-deny firewall ══════════
+                                      │
+ ┌────────────────────────────────────▼───────────────────────────────────────┐
+ │  ./scripts/ralph-sandbox-up.sh  →  ralph-loop.sh        ── UNATTENDED ──     │
+ │  firewall up → pnpm install → loop while  - [ ]  items remain:               │
+ │                                                                             │
+ │   ┌──────────────────────────  ONE ITERATION  ───────────────────────────┐  │
+ │   │  fresh context, zero memory  ──reads──►  specs/ · fix_plan.md · PROMPT │  │
+ │   │                                                                       │  │
+ │   │  ① GENERATE    claude -p PROMPT.md   pick the TOP  - [ ] , implement   │  │
+ │   │                it + its @acceptance test, one productive commit        │  │
+ │   │                              │                                        │  │
+ │   │                              ▼                                        │  │
+ │   │  ② BACKPRESSURE  backpressure-gate.sh  — one exit code, fail-fast      │  │
+ │   │     biome│tsc│stub-guard│dup-guard│build+test│acceptance│secrets│deps  │  │
+ │   │              │                              │                         │  │
+ │   │         GREEN │                              │ RED                     │  │
+ │   │              ▼                              ▼                         │  │
+ │   │   git update-ref refs/green HEAD    git reset --hard refs/green        │  │
+ │   │   tick the box · keep the commit    (rewind to last-known-good)        │  │
+ │   │                                     stalls++                          │  │
+ │   └──────────────────────────────┬────────────────────────────────────────┘  │
+ │                                  │ loop back                                │
+ │   HALT when ▸  no  - [ ]  left = DONE  ·  MAX_STALLS reached  ·  STOP file   │
+ │              ·  campaign deadline  ·  low disk     → notify / page a human   │
+ │   CAPS (env) ▸  MAX_ITERS · ITER_TIMEOUT · BUDGET_USD · MAX_TURNS · MODEL    │
+ └───────────────────────────────────┬─────────────────────────────────────────┘
+                                      │  loop exits
+                                      ▼
+        back on the HOST: you review the branch, then merge to main yourself
+        (the loop never pushes, never publishes, never touches main)
+```
+
+The point of the boundary: planning is interactive and safe; the loop runs with
+permissions bypassed, so it's confined to a Docker container behind a default-deny
+firewall. The launcher **refuses to cross that line for you** — Phase 3 only
+*prints* the launch line. The **memory files are the contract** between the planes:
+each iteration starts amnesiac and rebuilds intent only from `specs/ +
+fix_plan.md + PROMPT.md`. **Backpressure is `②`** — the agent generates, the
+composite gate pushes back; green advances `refs/green` and ticks a box, red
+rewinds to the last green commit so a bad iteration can't accumulate.
+
+`/backpressure-loop` is the supported entry point — it plans the campaign, wires
+the gate, and hands off to the sandboxed harness. The tested TypeScript building
+blocks (`loop/governor.ts`, `loop/journal.ts`) and the headless-invocation seam
+(`seam/run.ts`) are there for assembling your own harness. New to the technique?
+See the [Ralph beginner guide](docs/RALPH_GUIDE.md) and the
+[User Guide](docs/USER_GUIDE.md#loop-building-blocks).

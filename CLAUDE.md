@@ -39,9 +39,9 @@ Nowhere else in the codebase should know a target's name.
 | --- | --- |
 | `src/core/task.ts` | Task schema (zod) — the contract everything talks to |
 | `src/tracker/` | Issue tracker: `store` (JSON file), `select` (next task), `server` (MCP) |
-| `src/seam/` | CLI-invocation seam: `targets`, `argv` (per-CLI flag maps), `run` |
+| `src/seam/` | CLI-invocation seam: `targets`, `argv` (per-CLI flag maps + `--json`), `run` (headless spawn + per-iteration cost capture) |
 | `src/adapters/{common,claude,codex}/` | Emit hooks / agents / mcp config per target |
-| `src/install/` | `init` installer + `plan` (what files `init` writes) |
+| `src/install/` | `plan` (the per-target file list) → `init` (write) / `remove` (uninstall) / `build` (compile + preview, no install) / `inventory` (report what's installed); `errors` (typed failures) |
 | `src/loop/` | `governor` (caps/kill switch) + `journal` (per-iteration JSONL) |
 | `src/skills/` | Skill loading; bundled skills live in `skills/` |
 | `src/cli.ts` | `backpressure` bin — `init`, `remove`, `build`, `index` |

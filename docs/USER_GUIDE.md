@@ -257,8 +257,9 @@ $ backpressure index --target claude
 2/3 capabilities installed
 ```
 
-It never writes or repairs anything (that is `init` / `remove`), and always
-exits 0 — it is a report, not a gate.
+It never writes or repairs anything (that is `init` / `remove`), and exits 0 on a
+successful report — it is a report, not a gate (bad input, e.g. an unknown
+`--target`, still exits non-zero like any command).
 
 ---
 
@@ -310,7 +311,14 @@ The same capability set, compiled to each target's native layout:
 {
   "hooks": {
     "Stop": [
-      { "hooks": [ { "type": "command", "command": "pnpm test" } ] }
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pnpm test"
+          }
+        ]
+      }
     ]
   }
 }
@@ -338,8 +346,9 @@ Codex puts hooks, MCP servers, and agents in **one** `.codex/config.toml`:
 ```
 
 ```toml
-[[hooks]]
-event = "Stop"
+[[hooks.Stop]]
+[[hooks.Stop.hooks]]
+type = "command"
 command = "pnpm test"
 
 [agents.reviewer]
@@ -378,6 +387,8 @@ src/
 │  └─ verify.ts            # verifySkills — pre-install validation gate
 ├─ install/
 │  ├─ plan.ts              # planInstall — pure per-target file plan
+│  ├─ build.ts             # build — compile + preview per-target config (no install)
+│  ├─ inventory.ts         # inventory — report which capabilities are installed
 │  ├─ init.ts              # init — compile + write the planned files
 │  ├─ remove.ts            # remove — delete previously-installed skills
 │  └─ errors.ts            # InstallError hierarchy (includes SkillVerificationError)
@@ -431,11 +442,13 @@ The one real CLI-specific abstraction — it normalizes the flag differences
 between `claude -p` and `codex exec`.
 
 - **`TARGET_FLAGS` / `flagsFor(target)`** — the per-target flag spellings
-  (headless, permission/sandbox bypass, model, max-turns). Codex has no
-  max-turns flag, so it's `null`.
+  (headless, permission/sandbox bypass, model, max-turns, `jsonOutput`,
+  `costPath`). Codex has no max-turns flag and no per-call cost figure, so both
+  its `maxTurns` flag and `costPath` are `null`.
 - **`buildArgv(target, prompt, opts)`** — **pure**; builds the exact argv array.
 - **`runAgent(target, prompt, opts)`** — spawns the target binary headless via an
-  **injectable** `SpawnFn` and resolves with the exit code.
+  **injectable** `SpawnFn` and resolves with a `RunResult`: the exit code plus,
+  when `json: true` and the target reports cost (Claude), the run's `costUsd`.
 
 ```ts
 import { buildArgv } from "./src/seam/argv.js";
@@ -486,8 +499,8 @@ describe can't be routed to).
 ### Loop building blocks
 
 Present and tested, ready to assemble into a TypeScript loop. v0 ships **no**
-bundled loop runner — drive the autonomous build loop with the CLI's own
-mechanism (e.g. Claude Code's built-in `/loop`) against a throwaway git worktree,
+bundled loop runner — drive the autonomous build loop with **`/backpressure-loop`**
+(it plans the campaign, wires the gate, and hands off to the sandboxed harness),
 or wire these primitives into a harness of your own. New to the autonomous-loop
 idea? See the [Ralph beginner guide](RALPH_GUIDE.md) for the technique this
 project is named after and a step-by-step workflow recipe.
@@ -509,8 +522,10 @@ gov.decide();   // { halt: false }  (until a cap is hit)
 ```
 
 The headless-invocation seam (`seam/run.ts`, `seam/argv.ts`, `seam/targets.ts`)
-builds the argv for one non-interactive agent run per target — the other half of
-a loop you assemble yourself.
+runs one non-interactive agent per target via `runAgent`, which returns
+`{ exitCode, costUsd? }` — pass that `costUsd` straight to `Governor.record()` to
+track cumulative spend against `maxBudgetUsd`. It's the other half of a loop you
+assemble yourself.
 
 > ⚠️ Whatever harness you drive these with, run it in a container or a throwaway
 > git worktree, never on your real repo: an autonomous loop runs the CLI with
@@ -587,7 +602,7 @@ import from the source modules directly.
 | `tracker/server.ts` | `buildTrackerServer`, `*InputShape` |
 | `seam/targets.ts` | `AgentTarget`, `TargetFlags`, `TARGET_FLAGS`, `flagsFor` |
 | `seam/argv.ts` | `AgentOpts`, `buildArgv` |
-| `seam/run.ts` | `runAgent`, `SpawnFn`, `nodeSpawnFn`, `SpawnedProcess`, `RunAgentOpts` |
+| `seam/run.ts` | `runAgent`, `parseCostUsd`, `RunResult`, `RunAgentOpts`, `SpawnFn`, `nodeSpawnFn`, `SpawnedProcess` |
 | `adapters/common/*` | `HookDefinition`, `SubagentDefinition`, `McpServerDefinition` |
 | `adapters/claude/*` | `emitClaudeHooks`, `emitClaudeAgents`, `emitClaudeMcp` |
 | `adapters/codex/*` | `emitCodexHooks`, `emitCodexAgents`, `emitCodexMcp` |
@@ -640,7 +655,7 @@ pnpm run build    # tsup -> dist/
   library API's `skillsSourceDir`.
 - **No bundled loop runner.** The TS loop pieces (`journal`, `governor`, `seam`)
   are tested but not assembled into a runnable TypeScript loop or wired into
-  `build`. Drive the autonomous build loop with the CLI's own mechanism (e.g.
-  Claude Code's `/loop`) or your own harness; v0 ships no loop binary.
+  `build`. Drive the autonomous build loop with `/backpressure-loop` (which hands
+  off to the sandboxed harness) or your own harness; v0 ships no loop binary.
 - **Store is a single JSON file.** SQLite (`better-sqlite3`) is a planned post-v0
   upgrade; there's no task for it yet.

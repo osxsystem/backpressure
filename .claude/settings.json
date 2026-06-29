@@ -1,14 +1,3 @@
 {
-  "hooks": {
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "./scripts/backpressure-gate.sh"
-          }
-        ]
-      }
-    ]
-  }
+  "hooks": {}
 }
