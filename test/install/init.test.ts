@@ -291,6 +291,91 @@ describe("init", () => {
   it("@acceptance DEFAULT_HOOKS still exports the pnpm test Stop gate", () => {
     expect(DEFAULT_HOOKS).toEqual([{ event: "Stop", command: "pnpm test" }]);
   });
+
+  it("@acceptance warns when the target repo has no test script and the default gate is used", async () => {
+    // A package.json without `scripts.test` → the default `pnpm test` Stop gate
+    // would no-op/error on every Stop, so init must flag it (issue #005).
+    await writeFile(join(dir, "package.json"), JSON.stringify({ name: "x" }));
+    const result = await init("claude", dir, { skillsSourceDir });
+    expect(result.warnings.some((w) => /no 'test' script found/.test(w))).toBe(true);
+  });
+
+  it("does not warn when the target package.json has a test script", async () => {
+    await writeFile(
+      join(dir, "package.json"),
+      JSON.stringify({ name: "x", scripts: { test: "vitest run" } }),
+    );
+    const result = await init("claude", dir, { skillsSourceDir });
+    expect(result.warnings).toEqual([]);
+  });
+
+  it("does not warn about a missing test script when --gate points at a non-test command", async () => {
+    // The user pointed the gate at their own command, so a missing `test` script
+    // is irrelevant — no warning.
+    await writeFile(join(dir, "package.json"), JSON.stringify({ name: "x" }));
+    const result = await init("claude", dir, {
+      gateCommand: "./scripts/backpressure-gate.sh",
+      skillsSourceDir,
+    });
+    expect(result.warnings).toEqual([]);
+  });
+
+  it("does not warn under --global (skills only, no Stop gate is installed)", async () => {
+    await writeFile(join(dir, "package.json"), JSON.stringify({ name: "x" }));
+    const result = await init("claude", dir, { skillsOnly: true, skillsSourceDir });
+    expect(result.warnings).toEqual([]);
+  });
+
+  it("@acceptance emits `<pm> test` for the package manager detected from the target lockfile", async () => {
+    await writeFile(join(dir, "yarn.lock"), "# yarn lockfile v1\n");
+    await writeFile(
+      join(dir, "package.json"),
+      JSON.stringify({ name: "x", scripts: { test: "jest" } }),
+    );
+    await init("claude", dir, { skillsSourceDir });
+    const settings = JSON.parse(await readFile(join(dir, ".claude", "settings.json"), "utf8"));
+    expect(settings.hooks.Stop[0].hooks[0].command).toBe("yarn test");
+  });
+
+  it("detects npm from a package-lock.json", async () => {
+    await writeFile(join(dir, "package-lock.json"), "{}\n");
+    await writeFile(
+      join(dir, "package.json"),
+      JSON.stringify({ name: "x", scripts: { test: "node --test" } }),
+    );
+    await init("claude", dir, { skillsSourceDir });
+    const settings = JSON.parse(await readFile(join(dir, ".claude", "settings.json"), "utf8"));
+    expect(settings.hooks.Stop[0].hooks[0].command).toBe("npm test");
+  });
+
+  it("the packageManager field wins over a conflicting lockfile", async () => {
+    await writeFile(join(dir, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
+    await writeFile(
+      join(dir, "package.json"),
+      JSON.stringify({ name: "x", packageManager: "yarn@4.1.0", scripts: { test: "jest" } }),
+    );
+    await init("claude", dir, { skillsSourceDir });
+    const settings = JSON.parse(await readFile(join(dir, ".claude", "settings.json"), "utf8"));
+    expect(settings.hooks.Stop[0].hooks[0].command).toBe("yarn test");
+  });
+
+  it("@acceptance codex also emits the detected `<pm> test` gate", async () => {
+    await writeFile(join(dir, "yarn.lock"), "# yarn lockfile v1\n");
+    await writeFile(
+      join(dir, "package.json"),
+      JSON.stringify({ name: "x", scripts: { test: "jest" } }),
+    );
+    await init("codex", dir, { skillsSourceDir });
+    const toml = await readFile(join(dir, ".codex", "config.toml"), "utf8");
+    expect(toml).toContain("yarn test");
+  });
+
+  it("an explicit gateCommand wins over package-manager detection", async () => {
+    await writeFile(join(dir, "yarn.lock"), "# yarn lockfile v1\n");
+    await init("claude", dir, { gateCommand: "npm test", skillsSourceDir });
+    const settings = JSON.parse(await readFile(join(dir, ".claude", "settings.json"), "utf8"));
+    expect(settings.hooks.Stop[0].hooks[0].command).toBe("npm test");
+  });
 });
 
 describe("bundledSkillsDir", () => {

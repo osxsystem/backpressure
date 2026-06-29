@@ -1,7 +1,10 @@
 {
-  "name": "backpressure",
-  "version": "0.0.0",
-  "private": true,
+  "name": "@osxsystem/backpressure",
+  "version": "0.1.0",
+  "private": false,
+  "publishConfig": {
+    "access": "public"
+  },
   "files": [
     "dist",
     "skills",
@@ -16,6 +19,7 @@
   },
   "scripts": {
     "build": "tsup",
+    "prepare": "tsup",
     "test": "vitest run",
     "test:acceptance": "vitest run -t @acceptance",
     "check": "biome check . && tsc --noEmit"
@@ -33,6 +37,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
     "commander": "^4.1.1",
+    "nanotar": "^0.3.0",
     "smol-toml": "^1.7.0",
     "zod": "^4.4.3"
   }

@@ -19,9 +19,9 @@ command string the caller can supply.
 
 End state:
 
-1. **`InitOptions` gains `gateCommand?: string`** (default `"pnpm test"`).
-   `init()` destructures `gateCommand = "pnpm test"` and forwards it to
-   `buildWrites`.
+1. **`InitOptions` gains `gateCommand?: string`** (originally default `"pnpm test"`;
+   the #005 stretch made an omitted value auto-detect `<pm> test` instead — see the
+   Amendment). `init()` forwards the resolved command to `buildWrites`.
 2. **`buildWrites` derives the Stop gate from `gateCommand`**, not from the
    literal constant. Introduce a tiny pure helper
    `stopGateHooks(cmd: string): HookDefinition[] => [{ event: "Stop", command: cmd }]`,
@@ -31,10 +31,11 @@ End state:
    (`stopGateHooks(gateCommand)`). The helper may live in `src/install/init.ts`
    (recommended; no new test file) or in `src/adapters/common/hooks.ts` (only if
    placed there, add `test/adapters/common/hooks.test.ts` in the same change).
-3. **`src/cli.ts` `init` registers `--gate <command>`** with default
-   `"pnpm test"` and a description such as "Command the Stop-hook gate runs;
-   point at ./scripts/backpressure-gate.sh for the composite gate." The action
-   passes `options.gate` as `gateCommand` into `init(...)`.
+3. **`src/cli.ts` `init` registers `--gate <command>`** and passes `options.gate`
+   as `gateCommand` into `init(...)`. (Originally carried a literal `"pnpm test"`
+   default; superseded by the issue #005 stretch — see the Amendment below — so it
+   now has *no* commander default and the command is auto-detected per repo when
+   omitted.)
 4. **The command stays a plain string everywhere outside the adapters.** No new
    file branches on which CLI; the existing `emitClaudeHooks` /`emitCodexHooks`
    compile the same string per target, honoring author-once / compile-per-target.
@@ -62,8 +63,10 @@ never reads hook contents, so a `gateCommand` field there would be dead.
    emits `.codex/config.toml` whose text **contains**
    `"./scripts/backpressure-gate.sh"` (substring assertion — shape-agnostic so it
    survives the `codex-hooks` nested-schema fix).
-5. `buildProgram()`'s `init` subcommand registers a `--gate` option whose
-   `defaultValue` is `"pnpm test"`.
+5. `buildProgram()`'s `init` subcommand registers a `--gate` option. *(Updated by
+   the #005 stretch: its `defaultValue` is now `undefined` — omitting `--gate`
+   triggers package-manager auto-detection in `init()` — and its description
+   mentions the auto-detected default. See the Amendment.)*
 6. The exported `DEFAULT_HOOKS` still equals
    `[{ event: "Stop", command: "pnpm test" }]`, anchoring the default after the
    refactor to a derived helper.
@@ -80,8 +83,9 @@ never reads hook contents, so a `gateCommand` field there would be dead.
    — in `test/install/init.test.ts`.
 4. `@acceptance init('codex', { gateCommand }) points the Stop gate at the configured command (shape-agnostic)`
    — in `test/install/init.test.ts`.
-5. `@acceptance init subcommand registers --gate defaulting to pnpm test`
-   — in `test/cli.test.ts`.
+5. `@acceptance init registers --gate with no hardcoded default (auto-detected per repo)`
+   — in `test/cli.test.ts`. *(Renamed from "registers --gate defaulting to pnpm
+   test" by the #005 stretch.)*
 6. `@acceptance DEFAULT_HOOKS still exports the pnpm test Stop gate`
    — in `test/install/init.test.ts`.
 
@@ -152,7 +156,10 @@ it("@acceptance init subcommand registers --gate defaulting to pnpm test", () =>
 - **It defaults to `"pnpm test"` so every existing test and install is byte-for-byte
   unchanged.** This is why criteria 1, 2, and 6 exist: they pin the default so
   the new knob can never silently change the out-of-the-box gate. The claude/codex
-  hooks adapter tests must keep passing untouched.
+  hooks adapter tests must keep passing untouched. *(Superseded by the #005 stretch:
+  the default is now the auto-detected `<pm> test`, with the `pnpm` fallback
+  preserving byte-compatibility for lockfile-less repos — so criteria 1, 2, 6 still
+  hold. See the Amendment.)*
 - **The value stays a plain string until the existing per-target adapters consume
   it — no new file branches on a target name.** This is the codebase's load-bearing
   invariant ("anything that branches on which CLI lives in exactly two places:
@@ -189,3 +196,28 @@ it("@acceptance init subcommand registers --gate defaulting to pnpm test", () =>
 - **A `--global` interaction.** `--global` installs skills only (`skillsOnly`), so
   no hook file is written and `--gate` is simply inert there; no special-casing
   is required.
+
+## Amendment — package-manager auto-detection (issue #005 stretch)
+
+The original design fixed the *default* gate at the literal `"pnpm test"` (both in
+`InitOptions` and the commander `--gate` default) for byte-compatibility. Issue
+#005's stretch goal supersedes that default — **not** the configurable-gate seam,
+which is untouched and load-bearing:
+
+- `init()` no longer destructures `gateCommand = "pnpm test"`. When `gateCommand`
+  is omitted it emits `` `${detectPackageManager(...)} test` `` — the package
+  manager detected from the target repo's `packageManager` field, then its
+  lockfile (`pnpm-lock.yaml`/`yarn.lock`/`package-lock.json`/`bun.lock*`), then a
+  **`pnpm` fallback**. An explicit `gateCommand` (or `--gate`) still wins verbatim.
+- `src/cli.ts` `--gate` drops its commander default so omission reaches `init()` as
+  `undefined` (the only way commander 4 can signal "detect"). Criterion 5 + its
+  acceptance test were updated to assert `defaultValue === undefined`.
+- **Byte-compatibility is preserved** for repos with no lockfile / no
+  `packageManager` field (the pnpm fallback), so criteria 1, 2, 6 and every
+  hooks-adapter test stay green. `DEFAULT_HOOKS` is unchanged.
+- The detected command is still a plain string flowing through the same
+  `stopGateHooks` → `emitClaudeHooks`/`emitCodexHooks` seam; **no new per-target
+  branch** is introduced (`detectPackageManager` is target-agnostic).
+
+See `issues/005-stop-hook-hardcodes-pnpm-test.md` and the detection +
+`<pm> test` acceptance tests in `test/install/init.test.ts`.

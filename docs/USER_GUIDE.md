@@ -109,6 +109,7 @@ backpressure <command> [options]
 | `remove` | ✅ wired | Removes previously-installed Backpressure skills. |
 | `build`  | ✅ wired | Compiles and **previews** the per-target config (read-only; does not install). |
 | `index`  | ✅ wired | Reports which Backpressure capabilities are installed in the current repo. |
+| `add`    | ✅ wired | Fetch and install a capability pack from a GitHub repo. |
 
 ### `backpressure init`
 
@@ -119,7 +120,7 @@ backpressure <command> [options]
 | `--skill <name>` | — | Install a bundled skill **in addition** to the defaults. Repeatable (`--skill a --skill b`). An unknown name fails cleanly, listing what's available. |
 | `--all-skills` | off | Install **every** bundled skill the pack ships, not just the defaults. |
 | `--global` | off | Install skills only into the **user-level** skills dir (`~/.claude/skills` or `~/.codex/skills`). Hooks and agent files are **not** written. |
-| `--gate <command>` | `pnpm test` | Command the installed **Stop-gate hook** runs after each turn. Point it at `./scripts/backpressure-gate.sh` to install the composite gate instead of bare tests. |
+| `--gate <command>` | auto-detected `<pm> test` | Command the installed **Stop-gate hook** runs after each turn. When omitted, Backpressure detects the repo's package manager (`packageManager` field → lockfile → `pnpm` fallback) and emits the matching `<pm> test` (e.g. `yarn test` in a yarn repo). Point it at `./scripts/backpressure-gate.sh` to install the composite gate instead of bare tests. |
 
 Behaviour:
 
@@ -127,7 +128,8 @@ Behaviour:
 - With `--global`, writes skills into `os.homedir()` (e.g. `~/.claude/skills/<name>/`)
   and skips all project-level config (hooks, agents).
 - Installs the **default capability set**: a `reviewer` subagent, a `Stop`-event
-  test-gate hook (`pnpm test`), and the bundled `building-adaptive-ui` skill.
+  test-gate hook (an auto-detected `<pm> test`, e.g. `pnpm test`), and the bundled
+  `building-adaptive-ui` skill.
   (No MCP servers are registered in v0 — the issue tracker is deferred, so no
   `.mcp.json` is written. See [Issue tracker](#issue-tracker-external-mcp-server).)
 - A skill is installed by **mirroring its whole directory** — `SKILL.md` plus any
@@ -138,6 +140,13 @@ Behaviour:
   nothing is written if any skill fails validation.
 - On success prints one line per file: `Wrote: <path>` (or `Planned: <path>` for
   a dry run).
+- If the Stop gate is a package `test` script (the auto-detected `<pm> test`, or
+  any `<pm> test` you pass) but the target repo's `package.json` declares no `scripts.test`,
+  `init` prints an advisory to stderr — `backpressure: no 'test' script found …`
+  — so the gate doesn't silently no-op. Pass `--gate <command>` to point it at a
+  command that exists, or add a `test` script. (Custom `--gate` commands and
+  `--global` installs, which write no Stop hook, are never flagged.) The advisory
+  is also reported under `--dry-run`.
 
 ```bash
 $ backpressure init --target claude
@@ -175,7 +184,7 @@ The pack ships with the installed package, so point `--from` at it inside
 `node_modules`:
 
 ```bash
-backpressure init --from node_modules/backpressure/packs/backpressure-loop --target claude
+backpressure init --from node_modules/@osxsystem/backpressure/packs/backpressure-loop --target claude
 ```
 
 This writes the pack's files to their installed locations — commands under
@@ -298,6 +307,30 @@ $ backpressure index --target claude
 It never writes or repairs anything (that is `init` / `remove`), and exits 0 on a
 successful report — it is a report, not a gate (bad input, e.g. an unknown
 `--target`, still exits non-zero like any command).
+
+---
+
+### `backpressure add <owner/repo>[@ref]`
+
+Fetch a capability pack from a GitHub repo and install it into the current repo.
+The remote counterpart of `init --from <dir>`: it resolves the ref to an immutable
+commit SHA, downloads the repo tarball, validates `backpressure.json`, shows a
+trust summary (the source `@sha`, every hook command, every executable script),
+and on confirmation installs via the same writer as `init --from`, recording the
+pin in `.backpressure/backpressure.lock`.
+
+```bash
+npx @osxsystem/backpressure@latest add osxsystem/backpressure
+```
+
+| Option | Default | Meaning |
+|--------|---------|---------|
+| `<owner/repo>[/subdir][@ref]` | — | The pack's GitHub location; `@ref` is a branch/tag/SHA (default: the repo's default branch). |
+| `--target <target>` | `claude` | `claude` or `codex` (must be in the pack's `targets`). |
+| `--global` | off | Install into `~/.claude` / `~/.codex` instead of the repo. |
+| `--yes` | off | Skip the trust prompt (for CI). |
+
+Set `GITHUB_TOKEN` to raise the API rate limit or install from a private repo.
 
 ---
 

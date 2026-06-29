@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type commander from "commander";
@@ -52,12 +52,16 @@ describe("buildProgram", () => {
     expect(flags).toEqual(expect.arrayContaining(["--skill", "--all-skills"]));
   });
 
-  it("@acceptance init subcommand registers --gate defaulting to pnpm test", () => {
+  it("@acceptance init registers --gate with no hardcoded default (auto-detected per repo)", () => {
     const initCmd = buildProgram().commands.find((c: commander.Command) => c.name() === "init");
     const gate = initCmd?.options.find(
-      (o: { long?: string; defaultValue?: unknown }) => o.long === "--gate",
+      (o: { long?: string; defaultValue?: unknown; description?: string }) => o.long === "--gate",
     );
-    expect(gate?.defaultValue).toBe("pnpm test");
+    expect(gate).toBeDefined();
+    // No fixed default: when --gate is omitted commander leaves the value
+    // undefined, and init() detects the repo's package manager → `<pm> test`.
+    expect(gate?.defaultValue).toBeUndefined();
+    expect((gate?.description ?? "").toLowerCase()).toContain("auto-detected");
   });
 
   it("@acceptance build registers --target/--out and is no longer a stub", () => {
@@ -128,6 +132,16 @@ describe("buildProgram", () => {
   });
 });
 
+describe("add subcommand", () => {
+  it("@acceptance registers add with --target/--global/--yes and is not a stub", () => {
+    const add = buildProgram().commands.find((c: commander.Command) => c.name() === "add");
+    expect(add).toBeDefined();
+    const flags = add?.options.map((o: { long?: string }) => o.long);
+    expect(flags).toEqual(expect.arrayContaining(["--target", "--global", "--yes"]));
+    expect(add?.description().toLowerCase()).not.toContain("not yet implemented");
+  });
+});
+
 describe("init --from", () => {
   it("registers a --from option on init", () => {
     const init = buildProgram().commands.find((c: commander.Command) => c.name() === "init");
@@ -170,5 +184,15 @@ describe("init --from", () => {
     } finally {
       process.chdir(origCwd);
     }
+  });
+});
+
+describe("package manifest", () => {
+  it("@acceptance publishes as a scoped, public package with the pack included", async () => {
+    const pkg = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
+    expect(pkg.name).toBe("@osxsystem/backpressure");
+    expect(pkg.private).toBe(false);
+    expect(pkg.files).toEqual(expect.arrayContaining(["dist", "skills", "packs"]));
+    expect(pkg.bin.backpressure).toBe("./dist/cli.js");
   });
 });

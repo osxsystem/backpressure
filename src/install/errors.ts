@@ -85,3 +85,27 @@ export class InvalidPackManifestError extends InstallError {
     this.name = "InvalidPackManifestError";
   }
 }
+
+/** Thrown when the `add` argument is not a valid `owner/repo[/subdir][@ref]`. */
+export class InvalidPackRefError extends InstallError {
+  constructor(arg: string) {
+    super(`invalid pack reference "${arg}". Expected owner/repo[/subdir][@ref].`);
+    this.name = "InvalidPackRefError";
+  }
+}
+
+/** Thrown when a fetched tar entry would escape the extraction root (zip-slip). */
+export class UnsafePackEntryError extends InstallError {
+  constructor(entry: string) {
+    super(`refusing unsafe pack entry "${entry}" (path traversal).`);
+    this.name = "UnsafePackEntryError";
+  }
+}
+
+/** Thrown when fetching a pack from GitHub fails (network, 404, 403, private). */
+export class PackFetchError extends InstallError {
+  constructor(message: string) {
+    super(message);
+    this.name = "PackFetchError";
+  }
+}

@@ -2,6 +2,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { parseManifest } from "../../src/add/manifest.js";
 import { planPack } from "../../src/add/pack.js";
+import { UnsafePackEntryError } from "../../src/install/errors.js";
 
 const pack = "/pack";
 const base = "/repo";
@@ -63,5 +64,46 @@ describe("planPack", () => {
     });
     expect(ops.some((o) => o.op === "writeText")).toBe(false);
     expect(notices.length).toBeGreaterThan(0);
+  });
+
+  // ── path-traversal (adversarial) ────────────────────────────────────────────
+
+  it("rejects a command whose name escapes .claude/commands/ via ../ traversal", () => {
+    const evil = parseManifest(
+      JSON.stringify({
+        name: "evil",
+        version: "1.0.0",
+        targets: ["claude"],
+        items: [{ type: "command", name: "../../../../evil", path: "commands/legit.md" }],
+        scripts: [],
+      }),
+    );
+    expect(() => planPack(pack, evil, "claude", base)).toThrow(UnsafePackEntryError);
+  });
+
+  it("rejects a skill whose path escapes the packDir via ../ traversal", () => {
+    const evil = parseManifest(
+      JSON.stringify({
+        name: "evil",
+        version: "1.0.0",
+        targets: ["claude"],
+        items: [{ type: "skill", name: "legit", path: "../../etc" }],
+        scripts: [],
+      }),
+    );
+    expect(() => planPack(pack, evil, "claude", base)).toThrow(UnsafePackEntryError);
+  });
+
+  it("rejects a scripts entry that escapes the packDir via ../ traversal", () => {
+    const evil = parseManifest(
+      JSON.stringify({
+        name: "evil",
+        version: "1.0.0",
+        targets: ["claude"],
+        items: [],
+        scripts: ["../../../etc/passwd"],
+      }),
+    );
+    expect(() => planPack(pack, evil, "claude", base)).toThrow(UnsafePackEntryError);
   });
 });
