@@ -1,3 +1,5 @@
+import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { installPack } from "../../src/add/install-pack.js";
@@ -114,6 +116,39 @@ describe("installPack (@acceptance)", () => {
     await expect(installPack("/pack", "claude", "/repo", io)).rejects.toThrow(
       InvalidPackManifestError,
     );
+  });
+
+  it("@acceptance writes NOTHING into the target when a source is missing (atomic install, no stale dir)", async () => {
+    // Real-fs repro of the QA finding: a manifest that references a missing
+    // source must not leave a partial install (e.g. a stale `.backpressure/
+    // scripts/` dir or an already-copied earlier script) behind.
+    const pack = await mkdtemp(join(tmpdir(), "bp-pack-"));
+    const repo = await mkdtemp(join(tmpdir(), "bp-repo-"));
+    try {
+      await mkdir(join(pack, "scripts"), { recursive: true });
+      await mkdir(join(pack, "commands"), { recursive: true });
+      await writeFile(join(pack, "commands", "demo.md"), "# demo\n");
+      await writeFile(join(pack, "scripts", "present.sh"), "#!/bin/sh\n");
+      // scripts/missing.sh is intentionally absent — and is ordered AFTER
+      // present.sh, so the buggy path copies present.sh before it fails.
+      await writeFile(
+        join(pack, "backpressure.json"),
+        JSON.stringify({
+          name: "p",
+          version: "1.0.0",
+          targets: ["claude"],
+          items: [{ type: "command", name: "demo", path: "commands/demo.md" }],
+          scripts: ["scripts/present.sh", "scripts/missing.sh"],
+        }),
+      );
+
+      await expect(installPack(pack, "claude", repo)).rejects.toThrow(InvalidPackManifestError);
+      // Atomic: the failed install leaves the target untouched.
+      expect(await readdir(repo)).toEqual([]);
+    } finally {
+      await rm(pack, { recursive: true, force: true });
+      await rm(repo, { recursive: true, force: true });
+    }
   });
 
   it("rejects InvalidPackManifestError when a command source file is missing (ENOENT on copyFile)", async () => {
