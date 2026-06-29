@@ -85,3 +85,11 @@ export class InvalidPackManifestError extends InstallError {
     this.name = "InvalidPackManifestError";
   }
 }
+
+/** Thrown when the `add` argument is not a valid `owner/repo[/subdir][@ref]`. */
+export class InvalidPackRefError extends InstallError {
+  constructor(arg: string) {
+    super(`invalid pack reference "${arg}". Expected owner/repo[/subdir][@ref].`);
+    this.name = "InvalidPackRefError";
+  }
+}
