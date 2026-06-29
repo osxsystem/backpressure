@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type commander from "commander";
@@ -180,5 +180,15 @@ describe("init --from", () => {
     } finally {
       process.chdir(origCwd);
     }
+  });
+});
+
+describe("package manifest", () => {
+  it("@acceptance publishes as a scoped, public package with the pack included", async () => {
+    const pkg = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
+    expect(pkg.name).toBe("@osxsystem/backpressure");
+    expect(pkg.private).toBe(false);
+    expect(pkg.files).toEqual(expect.arrayContaining(["dist", "skills", "packs"]));
+    expect(pkg.bin.backpressure).toBe("./dist/cli.js");
   });
 });

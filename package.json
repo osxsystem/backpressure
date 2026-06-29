@@ -1,7 +1,10 @@
 {
-  "name": "backpressure",
-  "version": "0.0.0",
-  "private": true,
+  "name": "@osxsystem/backpressure",
+  "version": "0.1.0",
+  "private": false,
+  "publishConfig": {
+    "access": "public"
+  },
   "files": [
     "dist",
     "skills",
@@ -16,6 +19,7 @@
   },
   "scripts": {
     "build": "tsup",
+    "prepare": "tsup",
     "test": "vitest run",
     "test:acceptance": "vitest run -t @acceptance",
     "check": "biome check . && tsc --noEmit"
