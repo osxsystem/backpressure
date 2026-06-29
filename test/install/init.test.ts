@@ -325,6 +325,57 @@ describe("init", () => {
     const result = await init("claude", dir, { skillsOnly: true, skillsSourceDir });
     expect(result.warnings).toEqual([]);
   });
+
+  it("@acceptance emits `<pm> test` for the package manager detected from the target lockfile", async () => {
+    await writeFile(join(dir, "yarn.lock"), "# yarn lockfile v1\n");
+    await writeFile(
+      join(dir, "package.json"),
+      JSON.stringify({ name: "x", scripts: { test: "jest" } }),
+    );
+    await init("claude", dir, { skillsSourceDir });
+    const settings = JSON.parse(await readFile(join(dir, ".claude", "settings.json"), "utf8"));
+    expect(settings.hooks.Stop[0].hooks[0].command).toBe("yarn test");
+  });
+
+  it("detects npm from a package-lock.json", async () => {
+    await writeFile(join(dir, "package-lock.json"), "{}\n");
+    await writeFile(
+      join(dir, "package.json"),
+      JSON.stringify({ name: "x", scripts: { test: "node --test" } }),
+    );
+    await init("claude", dir, { skillsSourceDir });
+    const settings = JSON.parse(await readFile(join(dir, ".claude", "settings.json"), "utf8"));
+    expect(settings.hooks.Stop[0].hooks[0].command).toBe("npm test");
+  });
+
+  it("the packageManager field wins over a conflicting lockfile", async () => {
+    await writeFile(join(dir, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
+    await writeFile(
+      join(dir, "package.json"),
+      JSON.stringify({ name: "x", packageManager: "yarn@4.1.0", scripts: { test: "jest" } }),
+    );
+    await init("claude", dir, { skillsSourceDir });
+    const settings = JSON.parse(await readFile(join(dir, ".claude", "settings.json"), "utf8"));
+    expect(settings.hooks.Stop[0].hooks[0].command).toBe("yarn test");
+  });
+
+  it("@acceptance codex also emits the detected `<pm> test` gate", async () => {
+    await writeFile(join(dir, "yarn.lock"), "# yarn lockfile v1\n");
+    await writeFile(
+      join(dir, "package.json"),
+      JSON.stringify({ name: "x", scripts: { test: "jest" } }),
+    );
+    await init("codex", dir, { skillsSourceDir });
+    const toml = await readFile(join(dir, ".codex", "config.toml"), "utf8");
+    expect(toml).toContain("yarn test");
+  });
+
+  it("an explicit gateCommand wins over package-manager detection", async () => {
+    await writeFile(join(dir, "yarn.lock"), "# yarn lockfile v1\n");
+    await init("claude", dir, { gateCommand: "npm test", skillsSourceDir });
+    const settings = JSON.parse(await readFile(join(dir, ".claude", "settings.json"), "utf8"));
+    expect(settings.hooks.Stop[0].hooks[0].command).toBe("npm test");
+  });
 });
 
 describe("bundledSkillsDir", () => {

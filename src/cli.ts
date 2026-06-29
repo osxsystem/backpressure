@@ -100,8 +100,7 @@ export function buildProgram(): commander.Command {
     )
     .option(
       "--gate <command>",
-      "Command the installed Stop-gate hook runs after each turn (default: pnpm test). Point at ./scripts/backpressure-gate.sh for the composite gate.",
-      "pnpm test",
+      "Command the installed Stop-gate hook runs after each turn. Default: an auto-detected `<pm> test` from the repo's package manager (lockfile / packageManager field, pnpm fallback). Point at ./scripts/backpressure-gate.sh for the composite gate.",
     )
     .option(
       "--from <dir>",

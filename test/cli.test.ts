@@ -52,12 +52,16 @@ describe("buildProgram", () => {
     expect(flags).toEqual(expect.arrayContaining(["--skill", "--all-skills"]));
   });
 
-  it("@acceptance init subcommand registers --gate defaulting to pnpm test", () => {
+  it("@acceptance init registers --gate with no hardcoded default (auto-detected per repo)", () => {
     const initCmd = buildProgram().commands.find((c: commander.Command) => c.name() === "init");
     const gate = initCmd?.options.find(
-      (o: { long?: string; defaultValue?: unknown }) => o.long === "--gate",
+      (o: { long?: string; defaultValue?: unknown; description?: string }) => o.long === "--gate",
     );
-    expect(gate?.defaultValue).toBe("pnpm test");
+    expect(gate).toBeDefined();
+    // No fixed default: when --gate is omitted commander leaves the value
+    // undefined, and init() detects the repo's package manager → `<pm> test`.
+    expect(gate?.defaultValue).toBeUndefined();
+    expect((gate?.description ?? "").toLowerCase()).toContain("auto-detected");
   });
 
   it("@acceptance build registers --target/--out and is no longer a stub", () => {

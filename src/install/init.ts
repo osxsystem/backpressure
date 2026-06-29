@@ -44,26 +44,88 @@ export function isPackageTestGate(command: string): boolean {
   return /^(pnpm|npm|yarn|bun)(\s+run)?\s+test$/.test(command.trim());
 }
 
+/** The slice of a target repo's `package.json` the installer reads. */
+interface TargetPackageJson {
+  scripts?: Record<string, unknown>;
+  /** Corepack's authoritative declaration, e.g. `"pnpm@8.6.0"`. */
+  packageManager?: unknown;
+}
+
 /**
- * Whether the target repo at `repoPath` declares a non-empty `scripts.test` in
- * its `package.json`. A missing or unparseable `package.json` counts as "no test
- * script". Reads through the injected {@link InstallIo} so it stays unit-testable
- * and never throws — the result is advisory only.
+ * Read and parse the target repo's `package.json`, or `null` if it is absent,
+ * unreadable, or unparseable. Goes through the injected {@link InstallIo} so it
+ * stays unit-testable, and never throws — every result it feeds is advisory.
  */
-async function targetHasTestScript(repoPath: string, io: InstallIo): Promise<boolean> {
+async function readTargetPackageJson(
+  repoPath: string,
+  io: InstallIo,
+): Promise<TargetPackageJson | null> {
   let raw: string;
   try {
     raw = await io.readText(join(repoPath, "package.json"));
   } catch {
-    return false; // absent (ENOENT) or unreadable → treat as no test script
+    return null; // absent (ENOENT) or unreadable
   }
   try {
-    const pkg = JSON.parse(raw) as { scripts?: Record<string, unknown> };
-    const test = pkg.scripts?.test;
-    return typeof test === "string" && test.trim() !== "";
+    return JSON.parse(raw) as TargetPackageJson;
   } catch {
-    return false; // unparseable package.json → treat as no test script
+    return null; // unparseable
   }
+}
+
+/** Whether `pkg` declares a non-empty `scripts.test`. */
+function hasTestScript(pkg: TargetPackageJson | null): boolean {
+  const test = pkg?.scripts?.test;
+  return typeof test === "string" && test.trim() !== "";
+}
+
+/** Package managers Backpressure can emit a `<pm> test` Stop gate for. */
+const PACKAGE_MANAGERS = ["pnpm", "npm", "yarn", "bun"] as const;
+export type PackageManager = (typeof PACKAGE_MANAGERS)[number];
+
+/**
+ * Lockfile → package manager, in detection priority order. A repo can carry more
+ * than one lockfile during a migration; the first match wins.
+ */
+const LOCKFILES: ReadonlyArray<readonly [string, PackageManager]> = [
+  ["pnpm-lock.yaml", "pnpm"],
+  ["yarn.lock", "yarn"],
+  ["package-lock.json", "npm"],
+  ["npm-shrinkwrap.json", "npm"],
+  ["bun.lockb", "bun"],
+  ["bun.lock", "bun"],
+];
+
+/**
+ * Detect the package manager the target repo at `repoPath` uses, so the default
+ * Stop gate can be emitted as `<pm> test` and actually run. Precedence:
+ *   1. the `packageManager` field in `package.json` (corepack's declaration),
+ *   2. a lockfile ({@link LOCKFILES} priority order),
+ *   3. `pnpm` as the fallback (Backpressure's historical default).
+ * Lockfile existence is probed through the injected {@link InstallIo} (a
+ * successful read = present); never throws.
+ */
+export async function detectPackageManager(
+  repoPath: string,
+  io: InstallIo,
+  pkg: TargetPackageJson | null,
+): Promise<PackageManager> {
+  const declared = pkg?.packageManager;
+  if (typeof declared === "string") {
+    const name = declared.split("@", 1)[0] ?? "";
+    if ((PACKAGE_MANAGERS as readonly string[]).includes(name)) {
+      return name as PackageManager;
+    }
+  }
+  for (const [file, pm] of LOCKFILES) {
+    try {
+      await io.readText(join(repoPath, file));
+      return pm; // a successful read means the lockfile is present
+    } catch {
+      // absent — try the next candidate
+    }
+  }
+  return "pnpm";
 }
 
 /**
@@ -177,11 +239,13 @@ export interface InitOptions {
    */
   skillsOnly?: boolean;
   /**
-   * Command the installed Stop-gate hook runs after each turn. Defaults to
-   * `"pnpm test"`. Point it at `./scripts/backpressure-gate.sh` to install the
-   * composite gate instead of bare tests. Stays an opaque string through the
-   * installer — only the per-target adapters render it (the author-once,
-   * compile-per-target seam).
+   * Command the installed Stop-gate hook runs after each turn. When omitted, it
+   * defaults to an auto-detected `<pm> test` — the target repo's package manager
+   * (`packageManager` field → lockfile → `pnpm` fallback) via
+   * {@link detectPackageManager}. Point it at `./scripts/backpressure-gate.sh` to
+   * install the composite gate instead of bare tests. Stays an opaque string
+   * through the installer — only the per-target adapters render it (the
+   * author-once, compile-per-target seam).
    */
   gateCommand?: string;
 }
@@ -320,7 +384,6 @@ export async function init(
     io = nodeInstallIo,
     skillsIo = nodeSkillsIo,
     skillsOnly = false,
-    gateCommand = "pnpm test",
   } = options;
 
   let plan = planInstall(target, repoPath, capabilities);
@@ -337,15 +400,26 @@ export async function init(
     throw new SkillVerificationError(problems);
   }
 
-  // Advise when the installed Stop gate runs a package `test` script the target
-  // repo doesn't define — the gate would silently no-op/error on every Stop.
-  // Skipped under `skillsOnly` (no Stop hook is installed) and when the gate is
-  // a custom command (not a `<pm> test` invocation). Computed for dry runs too.
+  // Resolve the Stop-gate command and any advisory, reading the target's
+  // package.json once. An explicit `--gate` wins verbatim; otherwise emit
+  // `<pm> test` for the package manager detected from the repo (lockfile /
+  // `packageManager` field, pnpm fallback) so the default gate actually runs.
+  // Under `skillsOnly` no Stop hook is installed, so detection is skipped and the
+  // command (unused) stays at the historical default.
   const warnings: string[] = [];
-  if (!skillsOnly && isPackageTestGate(gateCommand) && !(await targetHasTestScript(repoPath, io))) {
-    warnings.push(
-      `no 'test' script found in the target package.json — the Stop gate (\`${gateCommand}\`) will not run. Pass --gate <command> to point it at your test or build command.`,
-    );
+  let gateCommand: string;
+  if (skillsOnly) {
+    gateCommand = options.gateCommand ?? "pnpm test";
+  } else {
+    const pkg = await readTargetPackageJson(repoPath, io);
+    gateCommand = options.gateCommand ?? `${await detectPackageManager(repoPath, io, pkg)} test`;
+    // Warn when the gate runs a package `test` script the repo doesn't define —
+    // the gate would silently no-op/error on every Stop. Computed for dry runs too.
+    if (isPackageTestGate(gateCommand) && !hasTestScript(pkg)) {
+      warnings.push(
+        `no 'test' script found in the target package.json — the Stop gate (\`${gateCommand}\`) will not run. Pass --gate <command> to point it at your test or build command.`,
+      );
+    }
   }
 
   if (dryRun) {
