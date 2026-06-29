@@ -4,9 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type commander from "commander";
 import { describe, expect, it } from "vitest";
-import { buildProgram, cliErrorLine } from "../src/cli.js";
+import { buildProgram, cliErrorLine, parseTarget } from "../src/cli.js";
 import { build, formatArtifacts } from "../src/install/build.js";
-import { MissingSkillSourceError } from "../src/install/errors.js";
+import { InstallError, MissingSkillSourceError } from "../src/install/errors.js";
 import { formatInventory, inventory } from "../src/install/inventory.js";
 
 describe("cliErrorLine", () => {
@@ -17,6 +17,24 @@ describe("cliErrorLine", () => {
 
   it("returns null for a plain Error (selective catch / rethrow)", () => {
     expect(cliErrorLine(new Error("boom"))).toBeNull();
+  });
+});
+
+describe("parseTarget", () => {
+  it("narrows a known target", () => {
+    expect(parseTarget("claude")).toBe("claude");
+    expect(parseTarget("codex")).toBe("codex");
+  });
+
+  it("@acceptance throws an InstallError for an unknown target (clean CLI line, no stack)", () => {
+    expect(() => parseTarget("vim")).toThrow(InstallError);
+    let line: string | null = null;
+    try {
+      parseTarget("vim");
+    } catch (e) {
+      line = cliErrorLine(e);
+    }
+    expect(line).toBe('backpressure: unknown target "vim". Expected one of: claude, codex.');
   });
 });
 

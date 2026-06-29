@@ -41,12 +41,16 @@ function collect(value: string, previous: string[]): string[] {
 /** The agent CLIs `init` can target, used to validate `--target`. */
 const TARGETS: readonly AgentTarget[] = ["claude", "codex"];
 
-/** Narrow an arbitrary string to a known {@link AgentTarget}, or throw. */
-function parseTarget(value: string): AgentTarget {
+/**
+ * Narrow an arbitrary string to a known {@link AgentTarget}, or throw an
+ * {@link InstallError} so an unknown `--target` surfaces as a clean
+ * `backpressure: …` line (via {@link cliErrorLine}) instead of a raw stack.
+ */
+export function parseTarget(value: string): AgentTarget {
   if ((TARGETS as readonly string[]).includes(value)) {
     return value as AgentTarget;
   }
-  throw new Error(`Unknown target "${value}". Expected one of: ${TARGETS.join(", ")}.`);
+  throw new InstallError(`unknown target "${value}". Expected one of: ${TARGETS.join(", ")}.`);
 }
 
 /**
