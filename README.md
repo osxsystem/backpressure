@@ -43,6 +43,12 @@ Full CLI reference, what `init` installs, and the library API are in the
 
 ## Running an autonomous loop
 
+Install the launcher into any repo with one line:
+
+```bash
+npx @osxsystem/backpressure@latest add osxsystem/backpressure
+```
+
 Backpressure isn't a runtime — the loop, context management, and sandboxing stay
 with the CLI. What this repo adds is **`/backpressure-loop`**, a launcher command
 (`.claude/commands/backpressure-loop.md`) that plans the campaign, wires

@@ -109,6 +109,7 @@ backpressure <command> [options]
 | `remove` | ✅ wired | Removes previously-installed Backpressure skills. |
 | `build`  | ✅ wired | Compiles and **previews** the per-target config (read-only; does not install). |
 | `index`  | ✅ wired | Reports which Backpressure capabilities are installed in the current repo. |
+| `add`    | ✅ wired | Fetch and install a capability pack from a GitHub repo. |
 
 ### `backpressure init`
 
@@ -298,6 +299,30 @@ $ backpressure index --target claude
 It never writes or repairs anything (that is `init` / `remove`), and exits 0 on a
 successful report — it is a report, not a gate (bad input, e.g. an unknown
 `--target`, still exits non-zero like any command).
+
+---
+
+### `backpressure add <owner/repo>[@ref]`
+
+Fetch a capability pack from a GitHub repo and install it into the current repo.
+The remote counterpart of `init --from <dir>`: it resolves the ref to an immutable
+commit SHA, downloads the repo tarball, validates `backpressure.json`, shows a
+trust summary (the source `@sha`, every hook command, every executable script),
+and on confirmation installs via the same writer as `init --from`, recording the
+pin in `.backpressure/backpressure.lock`.
+
+```bash
+npx @osxsystem/backpressure@latest add osxsystem/backpressure
+```
+
+| Option | Default | Meaning |
+|--------|---------|---------|
+| `<owner/repo>[/subdir][@ref]` | — | The pack's GitHub location; `@ref` is a branch/tag/SHA (default: the repo's default branch). |
+| `--target <target>` | `claude` | `claude` or `codex` (must be in the pack's `targets`). |
+| `--global` | off | Install into `~/.claude` / `~/.codex` instead of the repo. |
+| `--yes` | off | Skip the trust prompt (for CI). |
+
+Set `GITHUB_TOKEN` to raise the API rate limit or install from a private repo.
 
 ---
 
