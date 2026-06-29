@@ -45,16 +45,29 @@ function authHeaders(): Record<string, string> {
 
 /**
  * Build a status-aware {@link PackFetchError} for GitHub API responses.
- * 403 → rate-limit / token hint; 404 → not-found / private hint; else → generic.
+ * 403 → rate-limit / scope hint; 404 → not-found / access hint; else → generic.
+ *
+ * `hasToken` tailors the hint: when a `GITHUB_TOKEN` is already set, re-suggesting
+ * "set GITHUB_TOKEN" is confusing, so the message points at the likely real cause
+ * (rate limit, or the token lacking `repo` scope) instead. Defaults to reading the
+ * env; pass it explicitly in tests. Exported for unit testing.
  */
-function ghError(status: number, what: string): PackFetchError {
+export function ghError(
+  status: number,
+  what: string,
+  hasToken: boolean = (process.env.GITHUB_TOKEN ?? "") !== "",
+): PackFetchError {
   if (status === 403)
     return new PackFetchError(
-      "GitHub access denied (403) — rate limit, or set GITHUB_TOKEN with repo scope for a private repo.",
+      hasToken
+        ? "GitHub access denied (403) — rate limit exceeded, or the token lacks the required scope for this repo."
+        : "GitHub access denied (403) — rate limit, or set GITHUB_TOKEN with repo scope for a private repo.",
     );
   if (status === 404)
     return new PackFetchError(
-      `${what} not found, or private repo — set GITHUB_TOKEN with repo scope to access private repos.`,
+      hasToken
+        ? `${what} not found, or the token lacks access (a private repo needs the \`repo\` scope).`
+        : `${what} not found, or private repo — set GITHUB_TOKEN with repo scope to access private repos.`,
     );
   return new PackFetchError(`${what} (${status}).`);
 }

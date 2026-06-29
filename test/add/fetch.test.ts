@@ -4,9 +4,9 @@ import { gzipSync } from "node:zlib";
 import { createTarGzip } from "nanotar";
 import { describe, expect, it } from "vitest";
 import type { PackFetcher } from "../../src/add/fetch.js";
-import { fetchPack, nodeBytesIo } from "../../src/add/fetch.js";
+import { fetchPack, ghError, nodeBytesIo } from "../../src/add/fetch.js";
 import { safeResolve } from "../../src/add/safejoin.js";
-import { UnsafePackEntryError } from "../../src/install/errors.js";
+import { PackFetchError, UnsafePackEntryError } from "../../src/install/errors.js";
 
 // GitHub tarballs wrap everything in a top-level "<repo>-<sha>/" dir.
 // NOTE: nanotar's TarFileAttrs.mode is a string (e.g. "755"), not a number.
@@ -130,5 +130,27 @@ describe("fetchPack", () => {
     const { dir } = await fetchPack({ owner: "o", repo: "backpressure" }, nodeBytesIo, fetcher);
     // Only ok.txt is written; escape.sh is silently dropped (never reaches safeResolve).
     await expect(readFile(join(dir, "ok.txt"), "utf8")).resolves.toBe("ok");
+  });
+});
+
+describe("ghError", () => {
+  it("404 without a token suggests setting GITHUB_TOKEN", () => {
+    const e = ghError(404, "cannot resolve o/r@main", false);
+    expect(e).toBeInstanceOf(PackFetchError);
+    expect(e.message).toContain("set GITHUB_TOKEN");
+    expect(e.message).toContain("cannot resolve o/r@main");
+  });
+
+  it("@acceptance 404 WITH a token does not re-suggest setting GITHUB_TOKEN (points at scope)", () => {
+    // The QA finding: telling a user who already set GITHUB_TOKEN to "set
+    // GITHUB_TOKEN" is confusing — point at access/scope instead.
+    const e = ghError(404, "cannot resolve o/r@main", true);
+    expect(e.message).not.toContain("set GITHUB_TOKEN");
+    expect(e.message.toLowerCase()).toContain("scope");
+  });
+
+  it("403 hint is token-aware too", () => {
+    expect(ghError(403, "x", false).message).toContain("set GITHUB_TOKEN");
+    expect(ghError(403, "x", true).message).not.toContain("set GITHUB_TOKEN");
   });
 });
