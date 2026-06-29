@@ -1,5 +1,6 @@
 import { readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
+import { gzipSync } from "node:zlib";
 import { createTarGzip } from "nanotar";
 import { describe, expect, it } from "vitest";
 import type { PackFetcher } from "../../src/add/fetch.js";
@@ -14,6 +15,40 @@ async function fakeTarball(prefix: string): Promise<Uint8Array> {
     { name: `${prefix}/backpressure.json`, data: '{"name":"p"}' },
     { name: `${prefix}/scripts/gate.sh`, data: "#!/bin/sh\n", attrs: { mode: "755" } },
   ]);
+}
+
+/**
+ * Build a POSIX **ustar** tar (gzipped) where each entry's path is split into the
+ * `prefix` field (header bytes 345–499, the dirname) and the `name` field (bytes
+ * 0–99, the basename) — exactly how GitHub's codeload server stores any path over
+ * 100 chars. nanotar's own `createTarGzip` cannot produce this (it only writes the
+ * 100-byte name field), so a hand-built header is the only faithful repro.
+ */
+function ustarPrefixSplitGzip(
+  entries: { dir: string; base: string; data: string; mode: string }[],
+) {
+  const blocks = entries.map(({ dir, base, data, mode }) => {
+    const h = Buffer.alloc(512);
+    h.write(base, 0, 100, "ascii"); // name (basename only)
+    h.write(`${mode.padStart(7, "0")}\0`, 100, 8, "ascii"); // mode
+    h.write("0001750\0", 108, 8, "ascii"); // uid
+    h.write("0001750\0", 116, 8, "ascii"); // gid
+    const size = Buffer.byteLength(data);
+    h.write(`${size.toString(8).padStart(11, "0")}\0`, 124, 12, "ascii"); // size
+    h.write("00000000000\0", 136, 12, "ascii"); // mtime
+    h.write("0", 156, 1, "ascii"); // typeflag = regular file
+    h.write("ustar\0", 257, 6, "ascii"); // magic
+    h.write("00", 263, 2, "ascii"); // version
+    h.write(dir, 345, 155, "ascii"); // prefix (dirname) — the ustar split
+    h.write("        ", 148, 8, "ascii"); // checksum field = spaces while summing
+    let sum = 0;
+    for (const byte of h) sum += byte;
+    h.write(`${sum.toString(8).padStart(6, "0")}\0 `, 148, 8, "ascii"); // checksum
+    const body = Buffer.alloc(Math.ceil(size / 512) * 512);
+    body.write(data, 0, "utf8");
+    return Buffer.concat([h, body]);
+  });
+  return new Uint8Array(gzipSync(Buffer.concat([...blocks, Buffer.alloc(1024)])));
 }
 
 describe("fetchPack", () => {
@@ -49,6 +84,35 @@ describe("fetchPack", () => {
     expect(() => safeResolve(root, "/etc/passwd")).toThrow(UnsafePackEntryError);
     // Guard allows legitimate relative paths
     expect(() => safeResolve(root, "subdir/file.txt")).not.toThrow();
+  });
+
+  it("@acceptance extracts files whose tarball path is ustar prefix-split (GitHub long paths > 100 chars)", async () => {
+    // Regression for the nanotar-0.3.0 ustar-prefix bug: a deep path (>100 chars)
+    // is split prefix/name by GitHub; the file must still survive extraction.
+    const sha = "b".repeat(40);
+    const wrapper = `backpressure-${sha}`;
+    const tar = ustarPrefixSplitGzip([
+      { dir: wrapper, base: "backpressure.json", data: '{"name":"p"}', mode: "644" },
+      {
+        dir: `${wrapper}/packs/backpressure-loop/scripts`,
+        base: "backpressure-gate.sh",
+        data: "#!/bin/sh\necho gate\n",
+        mode: "755",
+      },
+    ]);
+    const fetcher: PackFetcher = {
+      resolveSha: async () => sha,
+      downloadTarball: async () => tar,
+    };
+    const { dir } = await fetchPack(
+      { owner: "o", repo: "backpressure", subdir: "packs/backpressure-loop" },
+      nodeBytesIo,
+      fetcher,
+    );
+    const script = join(dir, "scripts", "backpressure-gate.sh");
+    expect(await readFile(script, "utf8")).toContain("echo gate");
+    const { mode } = await stat(script);
+    expect(mode & 0o111).toBeGreaterThan(0); // exec bit preserved through the split
   });
 
   it("nanotar normalises zip-slip entry names so fetchPack silently drops them", async () => {

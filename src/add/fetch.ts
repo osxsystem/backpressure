@@ -1,7 +1,7 @@
 import { chmod, mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { parseTarGzip } from "nanotar";
+import { gunzipSync } from "node:zlib";
 import { PackFetchError } from "../install/errors.js";
 import type { PackRef } from "./ref.js";
 import { safeResolve } from "./safejoin.js";
@@ -83,12 +83,101 @@ async function defaultBranch(ref: PackRef): Promise<string> {
   return ((await res.json()) as { default_branch: string }).default_branch;
 }
 
+/** One extracted regular file from the tarball (dirs/symlinks/meta are dropped). */
+interface TarFile {
+  /** Full, normalised path (ustar `prefix` + `name` rejoined). */
+  name: string;
+  data: Uint8Array;
+  /** Octal permission string (e.g. `"0000755"`), or undefined if unset. */
+  mode?: string;
+}
+
+/** Read a NUL-terminated field from a tar header. */
+function tarField(buf: Buffer, off: number, len: number): string {
+  let end = off;
+  const max = off + len;
+  while (end < max && buf[end] !== 0) end++;
+  return buf.toString("ascii", off, end);
+}
+
+/**
+ * Normalise a tar entry path the way a safe extractor must: forward slashes,
+ * no drive/leading-slash, and `..`/`.` segments resolved away. Mirrors nanotar's
+ * `_sanitizePath` so a hostile `prefix/../../../evil` collapses to `evil` (which
+ * then fails the wrapper-prefix filter and is dropped) — keeping the existing
+ * zip-slip posture while we read the real header ourselves.
+ */
+function sanitizeTarPath(p: string): string {
+  const s = p
+    .replace(/\\/g, "/")
+    .replace(/^[a-zA-Z]:\//, "")
+    .replace(/^\/+/, "");
+  const out: string[] = [];
+  for (const part of s.split("/")) {
+    if (part === "..") out.pop();
+    else if (part !== "." && part !== "") out.push(part);
+  }
+  return out.join("/");
+}
+
+/**
+ * Gunzip + parse a POSIX **ustar** tar into its regular files. Unlike nanotar
+ * 0.3.0 (which reads only the 100-byte `name` field), this also reads the ustar
+ * `prefix` field at bytes 345–499 and rejoins `prefix/name`, so paths over 100
+ * chars — which GitHub's codeload server stores split — are recovered instead of
+ * silently truncated to their basename and dropped. PAX (`x`) and GNU (`L`) long
+ * names override the next entry's path; meta entries (`g`/`x`/`L`) and non-files
+ * (dirs `5`, symlinks, …) carry no data and are skipped.
+ */
+function parseUstarTarGzip(gz: Uint8Array): TarFile[] {
+  const buf = gunzipSync(Buffer.from(gz));
+  const files: TarFile[] = [];
+  let off = 0;
+  let longName: string | undefined; // pending override from a PAX/GNU header
+  while (off + 512 <= buf.length) {
+    const name = tarField(buf, off, 100);
+    if (name === "") break; // end-of-archive zero block
+    const size = Number.parseInt(tarField(buf, off + 124, 12).trim() || "0", 8) || 0;
+    const type = String.fromCharCode(buf[off + 156] ?? 0x30);
+    const dataStart = off + 512;
+    const next = dataStart + Math.ceil(size / 512) * 512;
+
+    if (type === "x" || type === "g") {
+      if (type === "x") {
+        const m = /\d+ path=([^\n]*)\n/.exec(buf.toString("utf8", dataStart, dataStart + size));
+        if (m) longName = m[1];
+      }
+      off = next;
+      continue;
+    }
+    if (type === "L") {
+      longName = tarField(buf, dataStart, size);
+      off = next;
+      continue;
+    }
+    if (type === "0" || type === "\0") {
+      const prefix = tarField(buf, off + 345, 155);
+      const full = longName ?? (prefix ? `${prefix}/${name}` : name);
+      const mode = tarField(buf, off + 100, 8).trim();
+      files.push({
+        name: sanitizeTarPath(full),
+        data: new Uint8Array(buf.subarray(dataStart, dataStart + size)),
+        mode: mode || undefined,
+      });
+    }
+    longName = undefined;
+    off = next;
+  }
+  return files;
+}
+
 /**
  * Fetch + pin + extract a pack to a fresh temp dir. Resolves the ref to an
- * immutable SHA, downloads the GitHub tarball, gunzips + parses it (nanotar),
- * strips the leading `<repo>-<sha>/` wrapper, and writes each file under a temp
- * dir via {@link safeResolve} (zip-slip-safe). Honours `ref.subdir` as the pack
- * root. Returns the dir to hand to `installPack` plus the pinned SHA.
+ * immutable SHA, downloads the GitHub tarball, gunzips + parses it
+ * ({@link parseUstarTarGzip}), strips the leading `<repo>-<sha>/` wrapper, and
+ * writes each file under a temp dir via {@link safeResolve} (zip-slip-safe).
+ * Honours `ref.subdir` as the pack root. Returns the dir to hand to `installPack`
+ * plus the pinned SHA.
  */
 export async function fetchPack(
   ref: PackRef,
@@ -97,7 +186,7 @@ export async function fetchPack(
 ): Promise<{ dir: string; sha: string }> {
   const sha = await fetcher.resolveSha(ref);
   const bytes = await fetcher.downloadTarball(ref, sha);
-  const entries = await parseTarGzip(bytes);
+  const entries = parseUstarTarGzip(bytes);
   const root = await io.mkdtemp("bp-add-");
 
   // Strip GitHub's "<repo>-<sha>/" wrapper, then optional subdir.
@@ -106,7 +195,6 @@ export async function fetchPack(
 
   let wrote = 0;
   for (const e of entries) {
-    if (e.type !== "file" || !e.data) continue;
     if (!e.name.startsWith(stripPrefix)) continue;
     let rel = e.name.slice(stripPrefix.length);
     if (subPrefix) {
@@ -116,7 +204,7 @@ export async function fetchPack(
     if (!rel) continue;
     const dest = safeResolve(root, rel);
     await io.ensureDir(dirname(dest));
-    await io.writeBytes(dest, e.data, e.attrs?.mode);
+    await io.writeBytes(dest, e.data, e.mode);
     wrote++;
   }
   if (wrote === 0)
