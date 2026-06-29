@@ -1,4 +1,4 @@
-import { dirname, join, relative } from "node:path";
+import { basename, dirname, join, relative } from "node:path";
 import { InvalidPackManifestError, isEnoent } from "../install/errors.js";
 import { type InstallIo, nodeInstallIo } from "../install/init.js";
 import { type InstalledManifest, serializeInstalled } from "./installed.js";
@@ -37,6 +37,33 @@ export async function installPack(
   const { ops, notices } = planPack(packDir, manifest, choice, baseDir);
   const files: string[] = [];
   const rel = (p: string): string => relative(baseDir, p);
+
+  // Pre-flight: verify every copy SOURCE exists before writing anything, so a
+  // manifest that references a missing/empty source fails atomically — no
+  // partial install (e.g. a stale `.backpressure/scripts/` dir or a half-copied
+  // file) is left in the target. Mirrors init's validate-before-write gate.
+  for (const op of ops) {
+    if (op.op === "copyTree") {
+      let rels: string[];
+      try {
+        rels = await io.listFiles(op.from);
+      } catch (e) {
+        if (isEnoent(e)) throw new InvalidPackManifestError(`item source not found: ${op.from}`);
+        throw e;
+      }
+      if (rels.length === 0) throw new InvalidPackManifestError(`item source is empty: ${op.from}`);
+    } else if (op.op === "copyFile") {
+      let siblings: string[];
+      try {
+        siblings = await io.listFiles(dirname(op.from));
+      } catch (e) {
+        if (isEnoent(e)) throw new InvalidPackManifestError(`item source not found: ${op.from}`);
+        throw e;
+      }
+      if (!siblings.includes(basename(op.from)))
+        throw new InvalidPackManifestError(`item source not found: ${op.from}`);
+    }
+  }
 
   for (const op of ops) {
     if (op.op === "copyTree") {
