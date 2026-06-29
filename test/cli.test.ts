@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type commander from "commander";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { buildProgram, cliErrorLine, parseTarget } from "../src/cli.js";
 import { build, formatArtifacts } from "../src/install/build.js";
 import { InstallError, MissingSkillSourceError } from "../src/install/errors.js";
@@ -195,4 +195,48 @@ describe("package manifest", () => {
     expect(pkg.files).toEqual(expect.arrayContaining(["dist", "skills", "packs"]));
     expect(pkg.bin.backpressure).toBe("./dist/cli.js");
   });
+});
+
+describe("clean CLI errors end-to-end (no raw stack traces)", () => {
+  // Drives the REAL program through parseAsync — not parseTarget in isolation —
+  // because the e2e report (2026-06-25, §3.3) found the unit was fine while the
+  // wiring still printed a raw Node stack trace on a mistyped --target. These
+  // pin the action-handler catch end-to-end so that regression can't return: an
+  // uncaught throw here surfaces as `threw === true`, and a stack trace would
+  // break the exact single-line stderr assertion.
+  async function runCli(args: string[]): Promise<{ stderr: string; threw: boolean }> {
+    const chunks: string[] = [];
+    const spy = vi
+      .spyOn(process.stderr, "write")
+      .mockImplementation((chunk: string | Uint8Array): boolean => {
+        chunks.push(typeof chunk === "string" ? chunk : Buffer.from(chunk).toString());
+        return true;
+      });
+    let threw = false;
+    try {
+      await buildProgram().parseAsync(["node", "backpressure", ...args]);
+    } catch {
+      threw = true; // an uncaught throw IS the raw-stack-trace regression
+    } finally {
+      spy.mockRestore();
+    }
+    return { stderr: chunks.join(""), threw };
+  }
+
+  for (const sub of ["init", "build", "index", "remove"]) {
+    it(`@acceptance \`${sub} --target bogus\` fails with one clean backpressure: line (no stack, exit 1)`, async () => {
+      const prevExit = process.exitCode;
+      try {
+        const { stderr, threw } = await runCli([sub, "--target", "bogus"]);
+        expect(threw).toBe(false);
+        expect(stderr).toBe(
+          'backpressure: unknown target "bogus". Expected one of: claude, codex.\n',
+        );
+        expect(stderr).not.toContain(" at "); // no V8 stack frames
+        expect(process.exitCode).toBe(1);
+      } finally {
+        process.exitCode = prevExit;
+      }
+    });
+  }
 });
