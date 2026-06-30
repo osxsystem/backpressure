@@ -48,12 +48,10 @@ The pack installed the gate and harness under `.backpressure/scripts/` and point
 the Stop hook at the gate. Make them live for THIS project:
 - `chmod +x .backpressure/scripts/backpressure-gate.sh .backpressure/scripts/ralph-loop.sh`
   (the copy preserves the mode, but ensure it stuck).
-- **Tune `.backpressure/scripts/backpressure-gate.sh` to the project's stack.** It
-  ships TypeScript/Node stages (biome / tsc / jscpd / vitest / gitleaks). If the
-  goal implies another language (e.g. Rust → `cargo fmt --check` /
-  `clippy -D warnings` / `cargo test` / `cargo build`), edit the stages but KEEP
-  the shape: fail-fast, one exit code, flock-wrapped build, a positive acceptance
-  stage (§3.7.2).
+- **Verify the auto-tuned gate.** The install detected the stack and wrote a tuned
+  `.backpressure/scripts/backpressure-gate.sh` (Rust/Node). Re-run `backpressure gate`
+  if the stack changed; only hand-edit for a stack it doesn't yet support (then the
+  gate drops its `@generated` marker and `backpressure gate` won't clobber it without `--force`).
 - Verify the Stop hook in `.claude/settings.json` already runs
   `./.backpressure/scripts/backpressure-gate.sh` (the pack wired this — do NOT run
   `backpressure init`, which would overwrite it). Fix it only if it drifted (§3.7.3).

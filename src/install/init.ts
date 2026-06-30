@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { copyFile, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { chmod, copyFile, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { emitClaudeAgents } from "../adapters/claude/agents.js";
@@ -152,6 +152,12 @@ export interface InstallIo {
    * scripts survive the install — a UTF-8 text round-trip would corrupt either.
    */
   copyFile(from: string, to: string): Promise<void>;
+  /**
+   * Mark `path` executable (chmod +x). Optional so existing in-memory test fakes
+   * need not implement it; the node impl sets mode 0o755. Used by writeTunedGate
+   * for the generated gate script (a text writeText would otherwise drop +x).
+   */
+  makeExecutable?(path: string): Promise<void>;
 }
 
 /** Default {@link InstallIo} backed by `node:fs/promises`. */
@@ -190,25 +196,33 @@ export const nodeInstallIo: InstallIo = {
     // script stays executable at the destination.
     await copyFile(from, to);
   },
+  async makeExecutable(path) {
+    await chmod(path, 0o755);
+  },
 };
 
-/**
- * Resolve the pack's *own* bundled skills dir (`<package-root>/skills`),
- * independent of the caller's cwd, so `init` can install into any target repo
- * while still sourcing skills from the pack. Walks up from this module to the
- * nearest `package.json` — which is the repo root in dev (`src/…`) and the
- * package root once built (`dist/cli.js`). Falls back to `<cwd>/skills` if no
- * package root is found (e.g. an unusual bundling layout).
- */
-export function bundledSkillsDir(): string {
+/** Walk up from this module to the nearest package root (dir with package.json). */
+function packageRootDir(): string | null {
   let dir = dirname(fileURLToPath(import.meta.url));
   for (let hops = 0; hops < 16; hops++) {
-    if (existsSync(join(dir, "package.json"))) return join(dir, "skills");
+    if (existsSync(join(dir, "package.json"))) return dir;
     const parent = dirname(dir);
     if (parent === dir) break;
     dir = parent;
   }
-  return join(process.cwd(), "skills");
+  return null;
+}
+
+/** Resolve the pack's own bundled skills dir (`<package-root>/skills`). */
+export function bundledSkillsDir(): string {
+  const root = packageRootDir();
+  return root === null ? join(process.cwd(), "skills") : join(root, "skills");
+}
+
+/** Resolve the pack's own bundled packs dir (`<package-root>/packs`). */
+export function bundledPacksDir(): string {
+  const root = packageRootDir();
+  return root === null ? join(process.cwd(), "packs") : join(root, "packs");
 }
 
 /** Options for {@link init}. */
@@ -248,6 +262,13 @@ export interface InitOptions {
    * author-once, compile-per-target seam).
    */
   gateCommand?: string;
+  /**
+   * When true, suppress init's own Stop-gate hook. `--with-loop` sets this so the
+   * loop pack's gate hook is the sole writer of `.claude/settings.json` (which is
+   * overwrite, not merge). Orchestration of the actual loop-pack install lives in
+   * `src/install/with-loop.ts` to avoid an init ↔ install-pack import cycle.
+   */
+  withLoop?: boolean;
 }
 
 /** The outcome of {@link init}: the plan, and whether files were actually written. */
@@ -384,12 +405,18 @@ export async function init(
     io = nodeInstallIo,
     skillsIo = nodeSkillsIo,
     skillsOnly = false,
+    withLoop = false,
   } = options;
 
   let plan = planInstall(target, repoPath, capabilities);
 
   if (skillsOnly) {
     plan = plan.filter((f) => f.kind === "skill");
+  }
+
+  if (withLoop) {
+    // Decision A: drop init's Stop hook so the loop pack's gate hook is the only one.
+    plan = plan.filter((f) => f.kind !== "hooks");
   }
 
   // Validate every skill in the resolved set BEFORE writing anything, so a

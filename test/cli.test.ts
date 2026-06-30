@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type commander from "commander";
@@ -159,6 +159,12 @@ describe("buildProgram", () => {
     expect(output).toContain("index");
     expect(output).toContain("remove");
   });
+
+  it("registers --with-loop on init", () => {
+    const initCmd = buildProgram().commands.find((c: commander.Command) => c.name() === "init");
+    const flags = initCmd?.options.map((o: { long?: string }) => o.long);
+    expect(flags).toContain("--with-loop");
+  });
 });
 
 describe("add subcommand", () => {
@@ -223,6 +229,103 @@ describe("package manifest", () => {
     expect(pkg.private).toBe(false);
     expect(pkg.files).toEqual(expect.arrayContaining(["dist", "skills", "packs"]));
     expect(pkg.bin.backpressure).toBe("./dist/cli.js");
+  });
+});
+
+describe("gate subcommand", () => {
+  it("registers the gate command (not a stub)", () => {
+    const names = buildProgram().commands.map((c: commander.Command) => c.name());
+    expect(names).toContain("gate");
+    const cmd = buildProgram().commands.find((c: commander.Command) => c.name() === "gate");
+    expect(cmd?.description().toLowerCase()).not.toContain("not yet implemented");
+  });
+
+  it("@acceptance `gate` errors cleanly when no .backpressure/ exists", async () => {
+    // Isolate BEFORE try so every spy and the temp dir are always cleaned up.
+    const dir = await mkdtemp(join(tmpdir(), "bp-gate-"));
+    const stderrChunks: string[] = [];
+    const stdoutChunks: string[] = [];
+    const spy = vi.spyOn(process.stderr, "write").mockImplementation((c: string | Uint8Array) => {
+      stderrChunks.push(typeof c === "string" ? c : Buffer.from(c).toString());
+      return true;
+    });
+    const outSpy = vi
+      .spyOn(process.stdout, "write")
+      .mockImplementation((c: string | Uint8Array) => {
+        stdoutChunks.push(typeof c === "string" ? c : Buffer.from(c).toString());
+        return true;
+      });
+    // Declare cwdSpy BEFORE try so it's always restorable in finally.
+    const cwdSpy = vi.spyOn(process, "cwd").mockReturnValue(dir);
+    const prevExit = process.exitCode;
+    try {
+      // run from a temp dir with no .backpressure/ and a hand-edit-less, absent gate
+      await buildProgram().parseAsync(["node", "backpressure", "gate"]);
+      // unknown stack is allowed (writes a generic gate); assert no raw stack trace
+      expect(stderrChunks.join("")).not.toContain(" at ");
+      // PROVE isolation: the written path must live inside the temp dir.
+      // If cwd interception silently failed this would contain the real repo path
+      // and the assertion would fail loudly rather than polluting the repo.
+      const stdout = stdoutChunks.join("");
+      expect(stdout).toContain(dir);
+    } finally {
+      cwdSpy.mockRestore();
+      outSpy.mockRestore();
+      spy.mockRestore();
+      process.exitCode = prevExit;
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("init --with-loop flag validation", () => {
+  async function runCli(args: string[]): Promise<{ stderr: string; threw: boolean }> {
+    const chunks: string[] = [];
+    const spy = vi
+      .spyOn(process.stderr, "write")
+      .mockImplementation((chunk: string | Uint8Array): boolean => {
+        chunks.push(typeof chunk === "string" ? chunk : Buffer.from(chunk).toString());
+        return true;
+      });
+    let threw = false;
+    try {
+      await buildProgram().parseAsync(["node", "backpressure", ...args]);
+    } catch {
+      threw = true;
+    } finally {
+      spy.mockRestore();
+    }
+    return { stderr: chunks.join(""), threw };
+  }
+
+  it("@acceptance init --with-loop --global fails with one clean backpressure: line (exit 1, no stack)", async () => {
+    const prevExit = process.exitCode;
+    try {
+      const { stderr, threw } = await runCli(["init", "--with-loop", "--global"]);
+      expect(threw).toBe(false);
+      expect(stderr).toContain("backpressure:");
+      expect(stderr).toContain("--with-loop");
+      expect(stderr).toContain("--global");
+      expect(stderr).not.toContain(" at "); // no V8 stack frames
+      expect(process.exitCode).toBe(1);
+    } finally {
+      process.exitCode = prevExit;
+    }
+  });
+
+  it("@acceptance init --with-loop --dry-run fails with one clean backpressure: line (exit 1, no stack)", async () => {
+    const prevExit = process.exitCode;
+    try {
+      const { stderr, threw } = await runCli(["init", "--with-loop", "--dry-run"]);
+      expect(threw).toBe(false);
+      expect(stderr).toContain("backpressure:");
+      expect(stderr).toContain("--with-loop");
+      expect(stderr).toContain("--dry-run");
+      expect(stderr).not.toContain(" at "); // no V8 stack frames
+      expect(process.exitCode).toBe(1);
+    } finally {
+      process.exitCode = prevExit;
+    }
   });
 });
 

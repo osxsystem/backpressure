@@ -2,7 +2,7 @@
 import { realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
-import { argv, cwd } from "node:process";
+import { argv } from "node:process";
 import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
 import commander from "commander";
@@ -11,10 +11,12 @@ import { nodeBytesIo, nodePackFetcher } from "./add/fetch.js";
 import { installPack } from "./add/install-pack.js";
 import { build, formatArtifacts } from "./install/build.js";
 import { InstallError } from "./install/errors.js";
+import { writeTunedGate } from "./install/gate.js";
 import { bundledSkillsDir, init, nodeInstallIo } from "./install/init.js";
 import { formatInventory, inventory } from "./install/inventory.js";
 import { DEFAULT_CAPABILITIES, resolveInstalledSkills } from "./install/plan.js";
 import { remove } from "./install/remove.js";
+import { installWithLoop } from "./install/with-loop.js";
 import type { AgentTarget } from "./seam/targets.js";
 import { formatSkills, listBundledSkills } from "./skills/list.js";
 import { listSkillDirs } from "./skills/load.js";
@@ -104,6 +106,10 @@ export function buildProgram(): commander.Command {
       "Command the installed Stop-gate hook runs after each turn. Default: an auto-detected `<pm> test` from the repo's package manager (lockfile / packageManager field, pnpm fallback). Point at ./scripts/backpressure-gate.sh for the composite gate.",
     )
     .option(
+      "--with-loop",
+      "Also install the bundled backpressure-loop pack and a stack-tuned gate (claude only).",
+    )
+    .option(
       "--from <dir>",
       "Install a local capability pack (a dir with backpressure.json) instead of the bundled defaults.",
     )
@@ -115,6 +121,7 @@ export function buildProgram(): commander.Command {
         allSkills?: boolean;
         global?: boolean;
         gate?: string;
+        withLoop?: boolean;
         from?: string;
       }) => {
         if (options.from !== undefined) {
@@ -128,7 +135,7 @@ export function buildProgram(): commander.Command {
               throw new InstallError("init --from does not support --dry-run yet.");
             }
             const target = parseTarget(options.target);
-            const baseDir = options.global ? homedir() : cwd();
+            const baseDir = options.global ? homedir() : process.cwd();
             const { installed, notices } = await installPack(
               resolve(options.from),
               target,
@@ -146,13 +153,28 @@ export function buildProgram(): commander.Command {
         }
         try {
           const target = parseTarget(options.target);
+          if (options.withLoop) {
+            if (options.global) {
+              throw new InstallError(
+                "--with-loop installs project-level scripts and hooks; it is incompatible with --global.",
+              );
+            }
+            if (options.dryRun) {
+              throw new InstallError(
+                "--with-loop performs a real install and does not support --dry-run.",
+              );
+            }
+            const { profile } = await installWithLoop(target, process.cwd());
+            process.stdout.write(`Installed the loop pack; gate tuned for: ${profile.kind}\n`);
+            return;
+          }
           const skillsSourceDir = bundledSkillsDir();
           const available = await listSkillDirs(skillsSourceDir);
           const skills = resolveInstalledSkills(available, {
             extra: options.skill,
             all: options.allSkills,
           });
-          const baseDir = options.global ? homedir() : cwd();
+          const baseDir = options.global ? homedir() : process.cwd();
           const result = await init(target, baseDir, {
             dryRun: options.dryRun,
             skillsSourceDir,
@@ -212,7 +234,7 @@ export function buildProgram(): commander.Command {
             extra: options.skill,
             all: options.allSkills,
           });
-          const baseDir = options.global ? homedir() : cwd();
+          const baseDir = options.global ? homedir() : process.cwd();
           const result = await remove(target, baseDir, {
             dryRun: options.dryRun,
             skills,
@@ -271,10 +293,28 @@ export function buildProgram(): commander.Command {
     .action(async (options: { target: string; json?: boolean }) => {
       try {
         const target = parseTarget(options.target);
-        const entries = await inventory(target, { baseDir: cwd() });
+        const entries = await inventory(target, { baseDir: process.cwd() });
         process.stdout.write(
           options.json ? `${JSON.stringify(entries, null, 2)}\n` : formatInventory(entries),
         );
+      } catch (e) {
+        const line = cliErrorLine(e);
+        if (line === null) throw e;
+        process.stderr.write(`${line}\n`);
+        process.exitCode = 1;
+      }
+    });
+
+  program
+    .command("gate")
+    .description("(Re)generate the composite gate tuned to this repo's stack.")
+    .option("--force", "Overwrite a hand-edited gate (one without the generated marker).")
+    .action(async (options: { force?: boolean }) => {
+      try {
+        const { path, profile } = await writeTunedGate(process.cwd(), nodeInstallIo, {
+          force: options.force,
+        });
+        process.stdout.write(`Wrote ${path}\nStack: ${profile.kind}\n`);
       } catch (e) {
         const line = cliErrorLine(e);
         if (line === null) throw e;
@@ -313,7 +353,7 @@ export function buildProgram(): commander.Command {
     .action(async (ref: string, options: { target: string; global?: boolean; yes?: boolean }) => {
       try {
         const choice = parseTarget(options.target);
-        const baseDir = options.global ? homedir() : cwd();
+        const baseDir = options.global ? homedir() : process.cwd();
         const { files, sha, notices } = await addPack(
           ref,
           { choice, baseDir, yes: options.yes },
@@ -327,6 +367,11 @@ export function buildProgram(): commander.Command {
         for (const f of files) process.stdout.write(`Wrote: ${join(baseDir, f)}\n`);
         for (const n of notices) process.stdout.write(`Note: ${n}\n`);
         process.stdout.write(`pinned ${ref.split("@")[0]}@${sha}\n`);
+        // If the pack installed the composite gate, tune it to this repo's stack.
+        if (files.some((f) => f.endsWith("backpressure-gate.sh"))) {
+          const { profile } = await writeTunedGate(baseDir, nodeInstallIo, { force: true });
+          process.stdout.write(`gate tuned for: ${profile.kind}\n`);
+        }
       } catch (e) {
         const line = cliErrorLine(e);
         if (line === null) throw e;
