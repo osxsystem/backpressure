@@ -300,7 +300,7 @@ export function buildProgram(): commander.Command {
     .option("--force", "Overwrite a hand-edited gate (one without the generated marker).")
     .action(async (options: { force?: boolean }) => {
       try {
-        const { path, profile } = await writeTunedGate(cwd(), nodeInstallIo, {
+        const { path, profile } = await writeTunedGate(process.cwd(), nodeInstallIo, {
           force: options.force,
         });
         process.stdout.write(`Wrote ${path}\nStack: ${profile.kind}\n`);
