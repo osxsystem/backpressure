@@ -130,6 +130,12 @@ describe("buildProgram", () => {
     expect(output).toContain("index");
     expect(output).toContain("remove");
   });
+
+  it("registers --with-loop on init", () => {
+    const initCmd = buildProgram().commands.find((c: commander.Command) => c.name() === "init");
+    const flags = initCmd?.options.map((o: { long?: string }) => o.long);
+    expect(flags).toContain("--with-loop");
+  });
 });
 
 describe("add subcommand", () => {

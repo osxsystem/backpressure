@@ -15,6 +15,7 @@ import { bundledSkillsDir, init, nodeInstallIo } from "./install/init.js";
 import { formatInventory, inventory } from "./install/inventory.js";
 import { DEFAULT_CAPABILITIES, resolveInstalledSkills } from "./install/plan.js";
 import { remove } from "./install/remove.js";
+import { installWithLoop } from "./install/with-loop.js";
 import type { AgentTarget } from "./seam/targets.js";
 import { listSkillDirs } from "./skills/load.js";
 
@@ -103,6 +104,10 @@ export function buildProgram(): commander.Command {
       "Command the installed Stop-gate hook runs after each turn. Default: an auto-detected `<pm> test` from the repo's package manager (lockfile / packageManager field, pnpm fallback). Point at ./scripts/backpressure-gate.sh for the composite gate.",
     )
     .option(
+      "--with-loop",
+      "Also install the bundled backpressure-loop pack and a stack-tuned gate (claude only).",
+    )
+    .option(
       "--from <dir>",
       "Install a local capability pack (a dir with backpressure.json) instead of the bundled defaults.",
     )
@@ -114,6 +119,7 @@ export function buildProgram(): commander.Command {
         allSkills?: boolean;
         global?: boolean;
         gate?: string;
+        withLoop?: boolean;
         from?: string;
       }) => {
         if (options.from !== undefined) {
@@ -145,6 +151,11 @@ export function buildProgram(): commander.Command {
         }
         try {
           const target = parseTarget(options.target);
+          if (options.withLoop) {
+            const { profile } = await installWithLoop(target, cwd());
+            process.stdout.write(`Installed the loop pack; gate tuned for: ${profile.kind}\n`);
+            return;
+          }
           const skillsSourceDir = bundledSkillsDir();
           const available = await listSkillDirs(skillsSourceDir);
           const skills = resolveInstalledSkills(available, {
