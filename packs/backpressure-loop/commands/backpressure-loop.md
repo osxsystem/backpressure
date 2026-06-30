@@ -21,7 +21,8 @@ safety check fails, STOP and tell me.
 ## Phase 0 — Safety floor (L0, §3.2.1)
 - Run `git rev-parse --abbrev-ref HEAD`. If it is `main`/`master`/`HEAD`, STOP and
   tell me to create a throwaway worktree first:
-  `git worktree add ../bp-loop -b ralph/auto && cd ../bp-loop`.
+  `git worktree add ../bp-loop -b ralph/auto && cd ../bp-loop`
+  (a new worktree has no `node_modules` — reinstall deps there in Phase 2).
 - Check `git status --porcelain`; refuse to scaffold over uncommitted work without
   my explicit OK.
 
@@ -60,6 +61,11 @@ the Stop hook at the gate. Make them live for THIS project:
   `vitest run -t @acceptance`, or for the Node test runner
   `node --test --test-name-pattern=@acceptance`) so the gate's positive acceptance
   stage is real, and author the `@acceptance` suite 1:1 from each spec's criteria.
+- **Install dependencies in this worktree** if the project has a manifest
+  (`pnpm install` / `npm install` / `yarn` to match its lockfile). A fresh
+  `git worktree` (Phase 0) starts with **no `node_modules`**, so the gate's `tsc`
+  and test stages would otherwise fail with confusing "cannot find module" /
+  missing-types errors that look like real bugs.
 - Run `./.backpressure/scripts/backpressure-gate.sh` once; it must exit 0 (GREEN)
   before you commit. Then commit the rails.
 

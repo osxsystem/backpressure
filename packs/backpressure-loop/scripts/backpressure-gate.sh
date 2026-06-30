@@ -4,12 +4,17 @@
 # docs/RALPH_PRODUCTION_GUIDE.md §3.7. It is wired as the Stop hook AND re-run by
 # the harness (scripts/ralph-loop.sh) and by CI, so local and CI never drift.
 #
-# TUNE PER PROJECT. The stages below assume a TypeScript/Node project
-# (biome + tsc + jscpd + vitest + gitleaks). For a Rust loop, swap stages 1–5 for
-# `cargo fmt --check`, `cargo clippy -- -D warnings`, `cargo test`, `cargo build` —
-# the honest compiler is your strongest backpressure (§1.5). Keep the SHAPE:
-# fail-fast, one exit code, flock-wrapped build, a positive acceptance stage.
-# The loop image (§3.2.2) is where jscpd/gitleaks/flock get installed.
+# ┌───────────────────────────────────────────────────────────────────────────┐
+# │  ⚠  TUNE THIS GATE TO YOUR STACK BEFORE RUNNING THE LOOP.                    │
+# │  The stages below assume a **pnpm + TypeScript/Node** project                │
+# │  (pnpm · biome · tsc · jscpd · vitest · gitleaks). In an npm/yarn repo, a    │
+# │  jest repo, or a non-JS project they FAIL with confusing "command not found" │
+# │  / wrong-runner errors until you edit them — e.g. swap `pnpm` for `npm`,     │
+# │  `vitest` for `jest`, or for Rust use `cargo fmt --check` / `clippy -D       │
+# │  warnings` / `cargo test` / `cargo build`. KEEP THE SHAPE: fail-fast, one    │
+# │  exit code, flock-wrapped build, a positive @acceptance stage (§3.7).        │
+# │  The loop image (§3.2.2) is where jscpd/gitleaks/flock get installed.        │
+# └───────────────────────────────────────────────────────────────────────────┘
 set -euo pipefail
 
 echo "== 1. format + lint (biome) =="

@@ -99,6 +99,35 @@ describe("buildProgram", () => {
     expect(flags).toContain("--global");
   });
 
+  it("registers the skills subcommand (discoverability, not a stub)", () => {
+    const program = buildProgram();
+    const names = program.commands.map((c: commander.Command) => c.name());
+    expect(names).toContain("skills");
+    const cmd = program.commands.find((c: commander.Command) => c.name() === "skills");
+    expect(cmd?.description().toLowerCase()).not.toContain("not yet implemented");
+    expect(cmd?.description().toLowerCase()).not.toContain("stub");
+  });
+
+  it("@acceptance `skills list` prints the bundled skills, marking the default", async () => {
+    const chunks: string[] = [];
+    const spy = vi
+      .spyOn(process.stdout, "write")
+      .mockImplementation((chunk: string | Uint8Array): boolean => {
+        chunks.push(typeof chunk === "string" ? chunk : Buffer.from(chunk).toString());
+        return true;
+      });
+    try {
+      await buildProgram().parseAsync(["node", "backpressure", "skills", "list"]);
+    } finally {
+      spy.mockRestore();
+    }
+    const out = chunks.join("");
+    expect(out).toContain("building-adaptive-ui"); // the default bundled skill
+    expect(out).toContain("* building-adaptive-ui"); // marked as default
+    expect(out).toContain("--all-skills"); // points users at the opt-in flags
+    expect(out).not.toContain("not yet implemented");
+  });
+
   it("registers --skill, --all-skills, and --global on remove", () => {
     const program = buildProgram();
     const removeCmd = program.commands.find((c: commander.Command) => c.name() === "remove");

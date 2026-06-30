@@ -16,6 +16,7 @@ import { formatInventory, inventory } from "./install/inventory.js";
 import { DEFAULT_CAPABILITIES, resolveInstalledSkills } from "./install/plan.js";
 import { remove } from "./install/remove.js";
 import type { AgentTarget } from "./seam/targets.js";
+import { formatSkills, listBundledSkills } from "./skills/list.js";
 import { listSkillDirs } from "./skills/load.js";
 
 const { Command } = commander;
@@ -274,6 +275,27 @@ export function buildProgram(): commander.Command {
         process.stdout.write(
           options.json ? `${JSON.stringify(entries, null, 2)}\n` : formatInventory(entries),
         );
+      } catch (e) {
+        const line = cliErrorLine(e);
+        if (line === null) throw e;
+        process.stderr.write(`${line}\n`);
+        process.exitCode = 1;
+      }
+    });
+
+  program
+    .command("skills [action]")
+    .description("List the bundled skills available to install (action: list).")
+    .action(async (action: string | undefined) => {
+      try {
+        const sub = action ?? "list";
+        if (sub !== "list") {
+          process.stderr.write(`backpressure: unknown skills action "${sub}". Available: list\n`);
+          process.exitCode = 1;
+          return;
+        }
+        const skills = await listBundledSkills(bundledSkillsDir(), DEFAULT_CAPABILITIES.skills);
+        process.stdout.write(formatSkills(skills));
       } catch (e) {
         const line = cliErrorLine(e);
         if (line === null) throw e;
