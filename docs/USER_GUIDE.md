@@ -320,7 +320,7 @@ and on confirmation installs via the same writer as `init --from`, recording the
 pin in `.backpressure/backpressure.lock`.
 
 ```bash
-npx @osxsystem/backpressure@latest add osxsystem/backpressure
+npx @osxsystem/backpressure@latest add osxsystem/backpressure/packs/backpressure-loop
 ```
 
 | Option | Default | Meaning |

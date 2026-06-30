@@ -46,7 +46,7 @@ Full CLI reference, what `init` installs, and the library API are in the
 Install the launcher into any repo with one line:
 
 ```bash
-npx @osxsystem/backpressure@latest add osxsystem/backpressure
+npx @osxsystem/backpressure@latest add osxsystem/backpressure/packs/backpressure-loop
 ```
 
 Backpressure isn't a runtime — the loop, context management, and sandboxing stay
