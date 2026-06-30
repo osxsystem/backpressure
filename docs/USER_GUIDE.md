@@ -611,6 +611,11 @@ or wire these primitives into a harness of your own. New to the autonomous-loop
 idea? See the [Ralph beginner guide](RALPH_GUIDE.md) for the technique this
 project is named after and a step-by-step workflow recipe.
 
+**One-step install:** `backpressure init --with-loop` installs the bundled loop pack
+(the `/backpressure-loop` command + harness scripts) and writes a composite gate
+**auto-tuned to the repo's stack** — `init` + `add …/backpressure-loop` in one
+network-free step. Re-tune any time with [`backpressure gate`](#backpressure-gate).
+
 The building blocks:
 
 - **`writeJournalEntry(path, entry, opts?)`** appends one JSONL line per iteration:

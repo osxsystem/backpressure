@@ -43,11 +43,21 @@ Full CLI reference, what `init` installs, and the library API are in the
 
 ## Running an autonomous loop
 
-Install the launcher into any repo with one line:
+Install the launcher in **one step** — the bundled `backpressure-loop` pack plus a
+composite gate **auto-tuned to your stack** (Rust / Node-TS), no network round-trip:
+
+```bash
+npx @osxsystem/backpressure@latest init --with-loop
+```
+
+Prefer to install the pack explicitly from GitHub (e.g. to pin a specific ref)? That
+still works:
 
 ```bash
 npx @osxsystem/backpressure@latest add osxsystem/backpressure/packs/backpressure-loop
 ```
+
+Either way you can re-tune the gate after a stack change with `backpressure gate`.
 
 Backpressure isn't a runtime — the loop, context management, and sandboxing stay
 with the CLI. What this repo adds is **`/backpressure-loop`**, a launcher command
