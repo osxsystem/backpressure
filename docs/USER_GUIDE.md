@@ -110,7 +110,28 @@ backpressure <command> [options]
 | `remove` | ✅ wired | Removes previously-installed Backpressure skills. |
 | `build`  | ✅ wired | Compiles and **previews** the per-target config (read-only; does not install). |
 | `index`  | ✅ wired | Reports which Backpressure capabilities are installed in the current repo. |
+| `skills` | ✅ wired | Lists the **bundled skills available to install** (`skills list`). |
 | `add`    | ✅ wired | Fetch and install a capability pack from a GitHub repo. |
+
+### `backpressure skills list`
+
+Lists every skill bundled with the package, so you can see what's installable
+**before** running `init` — no need to trigger an error to discover the names. A
+leading `*` marks the skills installed by default; the rest are opt-in via
+`init --skill <name>` or `init --all-skills`.
+
+```bash
+$ backpressure skills list
+* building-adaptive-ui — Build UI that adapts to themes using design tokens…
+  find-skills — Discover and install skills from the ecosystem…
+  grilling — Interview the user relentlessly about a plan or design…
+  …
+
+* installed by default · others via --skill <name> or --all-skills
+```
+
+> `skills list` reports what's **available to install**; `index` reports what's
+> **already installed** in the current repo.
 
 ### `backpressure init`
 
