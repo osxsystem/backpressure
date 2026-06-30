@@ -68,8 +68,9 @@ pnpm link --global       # makes `backpressure` available globally
 backpressure --help
 ```
 
-> **v0 note:** the package is `private` and not published to npm. You consume it
-> from this repo (the `backpressure` bin, or the source modules — see the
+> **Install:** the package is published to npm. Run it without installing via
+> `npx @osxsystem/backpressure@latest <command>`, or build from this repo (the
+> `backpressure` bin) / consume the source modules directly (see the
 > [Library API](#library-api-reference)).
 
 ---
@@ -320,7 +321,7 @@ and on confirmation installs via the same writer as `init --from`, recording the
 pin in `.backpressure/backpressure.lock`.
 
 ```bash
-npx @osxsystem/backpressure@latest add osxsystem/backpressure
+npx @osxsystem/backpressure@latest add osxsystem/backpressure/packs/backpressure-loop
 ```
 
 | Option | Default | Meaning |
