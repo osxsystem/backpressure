@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { copyFile, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { chmod, copyFile, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { emitClaudeAgents } from "../adapters/claude/agents.js";
@@ -152,6 +152,12 @@ export interface InstallIo {
    * scripts survive the install — a UTF-8 text round-trip would corrupt either.
    */
   copyFile(from: string, to: string): Promise<void>;
+  /**
+   * Mark `path` executable (chmod +x). Optional so existing in-memory test fakes
+   * need not implement it; the node impl sets mode 0o755. Used by writeTunedGate
+   * for the generated gate script (a text writeText would otherwise drop +x).
+   */
+  makeExecutable?(path: string): Promise<void>;
 }
 
 /** Default {@link InstallIo} backed by `node:fs/promises`. */
@@ -189,6 +195,9 @@ export const nodeInstallIo: InstallIo = {
     // node:fs copyFile carries the source's permission mode, so an executable
     // script stays executable at the destination.
     await copyFile(from, to);
+  },
+  async makeExecutable(path) {
+    await chmod(path, 0o755);
   },
 };
 
