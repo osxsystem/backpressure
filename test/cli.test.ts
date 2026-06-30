@@ -249,6 +249,57 @@ describe("gate subcommand", () => {
   });
 });
 
+describe("init --with-loop flag validation", () => {
+  async function runCli(args: string[]): Promise<{ stderr: string; threw: boolean }> {
+    const chunks: string[] = [];
+    const spy = vi
+      .spyOn(process.stderr, "write")
+      .mockImplementation((chunk: string | Uint8Array): boolean => {
+        chunks.push(typeof chunk === "string" ? chunk : Buffer.from(chunk).toString());
+        return true;
+      });
+    let threw = false;
+    try {
+      await buildProgram().parseAsync(["node", "backpressure", ...args]);
+    } catch {
+      threw = true;
+    } finally {
+      spy.mockRestore();
+    }
+    return { stderr: chunks.join(""), threw };
+  }
+
+  it("@acceptance init --with-loop --global fails with one clean backpressure: line (exit 1, no stack)", async () => {
+    const prevExit = process.exitCode;
+    try {
+      const { stderr, threw } = await runCli(["init", "--with-loop", "--global"]);
+      expect(threw).toBe(false);
+      expect(stderr).toContain("backpressure:");
+      expect(stderr).toContain("--with-loop");
+      expect(stderr).toContain("--global");
+      expect(stderr).not.toContain(" at "); // no V8 stack frames
+      expect(process.exitCode).toBe(1);
+    } finally {
+      process.exitCode = prevExit;
+    }
+  });
+
+  it("@acceptance init --with-loop --dry-run fails with one clean backpressure: line (exit 1, no stack)", async () => {
+    const prevExit = process.exitCode;
+    try {
+      const { stderr, threw } = await runCli(["init", "--with-loop", "--dry-run"]);
+      expect(threw).toBe(false);
+      expect(stderr).toContain("backpressure:");
+      expect(stderr).toContain("--with-loop");
+      expect(stderr).toContain("--dry-run");
+      expect(stderr).not.toContain(" at "); // no V8 stack frames
+      expect(process.exitCode).toBe(1);
+    } finally {
+      process.exitCode = prevExit;
+    }
+  });
+});
+
 describe("clean CLI errors end-to-end (no raw stack traces)", () => {
   // Drives the REAL program through parseAsync — not parseTarget in isolation —
   // because the e2e report (2026-06-25, §3.3) found the unit was fine while the

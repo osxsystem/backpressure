@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { InstallError } from "./errors.js";
+import { InstallError, isEnoent } from "./errors.js";
 import { type InstallIo, nodeInstallIo } from "./init.js";
 import { detectStack, type StackProfile } from "./stack.js";
 
@@ -106,7 +106,8 @@ export async function writeTunedGate(
     let existing: string | null = null;
     try {
       existing = await io.readText(path);
-    } catch {
+    } catch (e) {
+      if (!isEnoent(e)) throw e;
       existing = null; // no gate yet — nothing to protect
     }
     if (existing !== null && !existing.includes(GENERATED_MARKER)) {

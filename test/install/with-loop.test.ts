@@ -23,8 +23,10 @@ describe("installWithLoop (@acceptance)", () => {
     expect(cmd).not.toContain(" test");
   });
 
-  it("rejects --with-loop for codex (the loop pack is claude-only)", async () => {
+  it("@acceptance rejects codex BEFORE writing any files (atomic rejection)", async () => {
     const base = await mkdtemp(join(tmpdir(), "bp-withloop-codex-"));
     await expect(installWithLoop("codex", base)).rejects.toBeDefined();
+    // Nothing should have been written — .claude must not exist
+    await expect(stat(join(base, ".claude"))).rejects.toMatchObject({ code: "ENOENT" });
   });
 });

@@ -2,7 +2,7 @@
 import { realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
-import { argv, cwd } from "node:process";
+import { argv } from "node:process";
 import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
 import commander from "commander";
@@ -134,7 +134,7 @@ export function buildProgram(): commander.Command {
               throw new InstallError("init --from does not support --dry-run yet.");
             }
             const target = parseTarget(options.target);
-            const baseDir = options.global ? homedir() : cwd();
+            const baseDir = options.global ? homedir() : process.cwd();
             const { installed, notices } = await installPack(
               resolve(options.from),
               target,
@@ -153,7 +153,17 @@ export function buildProgram(): commander.Command {
         try {
           const target = parseTarget(options.target);
           if (options.withLoop) {
-            const { profile } = await installWithLoop(target, cwd());
+            if (options.global) {
+              throw new InstallError(
+                "--with-loop installs project-level scripts and hooks; it is incompatible with --global.",
+              );
+            }
+            if (options.dryRun) {
+              throw new InstallError(
+                "--with-loop performs a real install and does not support --dry-run.",
+              );
+            }
+            const { profile } = await installWithLoop(target, process.cwd());
             process.stdout.write(`Installed the loop pack; gate tuned for: ${profile.kind}\n`);
             return;
           }
@@ -163,7 +173,7 @@ export function buildProgram(): commander.Command {
             extra: options.skill,
             all: options.allSkills,
           });
-          const baseDir = options.global ? homedir() : cwd();
+          const baseDir = options.global ? homedir() : process.cwd();
           const result = await init(target, baseDir, {
             dryRun: options.dryRun,
             skillsSourceDir,
@@ -223,7 +233,7 @@ export function buildProgram(): commander.Command {
             extra: options.skill,
             all: options.allSkills,
           });
-          const baseDir = options.global ? homedir() : cwd();
+          const baseDir = options.global ? homedir() : process.cwd();
           const result = await remove(target, baseDir, {
             dryRun: options.dryRun,
             skills,
@@ -282,7 +292,7 @@ export function buildProgram(): commander.Command {
     .action(async (options: { target: string; json?: boolean }) => {
       try {
         const target = parseTarget(options.target);
-        const entries = await inventory(target, { baseDir: cwd() });
+        const entries = await inventory(target, { baseDir: process.cwd() });
         process.stdout.write(
           options.json ? `${JSON.stringify(entries, null, 2)}\n` : formatInventory(entries),
         );
@@ -321,7 +331,7 @@ export function buildProgram(): commander.Command {
     .action(async (ref: string, options: { target: string; global?: boolean; yes?: boolean }) => {
       try {
         const choice = parseTarget(options.target);
-        const baseDir = options.global ? homedir() : cwd();
+        const baseDir = options.global ? homedir() : process.cwd();
         const { files, sha, notices } = await addPack(
           ref,
           { choice, baseDir, yes: options.yes },

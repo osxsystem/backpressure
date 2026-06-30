@@ -1,13 +1,20 @@
+import { readFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { InstallError } from "../../src/install/errors.js";
 import { emitGate, GENERATED_MARKER, writeTunedGate } from "../../src/install/gate.js";
 import type { InstallIo } from "../../src/install/init.js";
 import type { StackProfile } from "../../src/install/stack.js";
 
+// repo root: this test file is at <root>/test/install/gate.test.ts
+const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
+
 const shapeOk = (s: string) =>
   s.startsWith("#!/usr/bin/env bash") &&
   s.includes(GENERATED_MARKER) &&
   s.includes("set -euo pipefail") &&
+  s.includes('echo "== secret scan =="') &&
   s.includes('echo "gate: GREEN"');
 
 describe("emitGate (@acceptance)", () => {
@@ -73,6 +80,14 @@ function memIo(seed: Record<string, string> = {}) {
   };
   return { io, files, made };
 }
+
+it("@acceptance bundled fallback gate equals emitGate(unknown) (no drift)", async () => {
+  const bundled = await readFile(
+    join(repoRoot, "packs/backpressure-loop/scripts/backpressure-gate.sh"),
+    "utf8",
+  );
+  expect(bundled).toBe(emitGate({ kind: "unknown" }));
+});
 
 describe("writeTunedGate (@acceptance)", () => {
   it("detects, emits, writes a tuned gate and marks it executable; idempotent", async () => {
