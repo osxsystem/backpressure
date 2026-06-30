@@ -40,6 +40,32 @@ turnkey gate to lift. Three pieces are worth stealing:
 The **stack detection + per-language command tables are net-new** in backpressure;
 that is the actual feature.
 
+## Glossary (for readers outside the Ralph/backpressure context)
+
+- **Backpressure** — a capability pack the `backpressure` CLI installs *into* an
+  agentic coding CLI (Claude Code / Codex). It is not a runtime.
+- **Ralph loop** — an unattended "generate → gate → advance-or-rewind" coding loop
+  (`scripts/ralph-loop.sh`) that runs in a sandbox; each iteration is amnesiac.
+- **The (composite) gate** — `backpressure-gate.sh`: one fail-fast pipeline
+  (format → lint → typecheck → test → build → acceptance → secret scan) with **one
+  exit code**. It is the loop's only "done" signal.
+- **Loop pack** — the bundled `packs/backpressure-loop/` capability pack: the
+  `/backpressure-loop` slash command + `ralph-loop.sh` + the gate, installed under
+  `.backpressure/` with a `Stop` hook wired to the gate.
+- **Stop hook** — a Claude Code hook (in `.claude/settings.json`) that runs after
+  each turn; backpressure wires it to the gate.
+- **Fail-closed** — when the tool can't be sure a check passed (e.g. unknown stack),
+  it must surface/err, never silently pass.
+
+## Decision log
+
+| # | Decision | Rationale |
+| --- | --- | --- |
+| A | With `--with-loop`, the **gate is the sole `Stop` hook**; `init` emits no `<pm> test` hook. | The gate is a superset of `<pm> test`; double-hooking is redundant. settings.json is **overwrite, not merge**, so omission (not merge) gives deterministic precedence. |
+| B | Emit a **plain editable bash gate**; no config-file override model / test-count floor. | YAGNI for v1 — the script *is* the config. topology's regex/override model recorded for later. |
+| C | Detect **Rust + Node/TS only**; everything else → `unknown` + banner. | Covers the reported friction; bounded scope. Python deferred. |
+| D | Tuned gate generated **auto at install + a `backpressure gate` regen command**. | Zero-friction out of the box, recoverable after stack changes. |
+
 ## Goals
 
 - `backpressure init --with-loop` installs the default capabilities **and** the
@@ -77,8 +103,8 @@ that is the actual feature.
 
 `backpressure init --with-loop [--target claude]`:
 
-1. Runs the normal default install (reviewer agent, bundled skills) **except** it
-   **suppresses the default `Stop → <pm> test` hook** (decision A).
+1. Runs the normal default install (reviewer agent, bundled skills) but **does not
+   emit its own `Stop → <pm> test` hook** (decision A — see below).
 2. Installs the **bundled** loop pack by calling the existing network-free
    `installPack()` pointed at `bundledPacksDir()/backpressure-loop` (a new
    `bundledPacksDir()` helper mirrors the existing `bundledSkillsDir()`). This
@@ -90,6 +116,26 @@ that is the actual feature.
 **Result:** exactly **one** `Stop` hook in `.claude/settings.json` — the composite
 gate (a superset of `<pm> test`) — and a gate tuned to the project.
 
+#### Decision A, re-scoped to the actual write model (overwrite, not merge)
+
+`.claude/settings.json` is produced by a **whole-file overwrite**: both `init`
+(`src/install/init.ts` → `emitClaudeHooks`) and the loop-pack install
+(`src/add/pack.ts` → `emitClaudeHooks`) serialize a *fresh* `{ hooks: … }` object
+and `writeText` it — **neither reads and merges an existing file**. The last writer
+wins and replaces the whole file.
+
+Two consequences this design relies on:
+
+- **Decision A is implemented by omission, not merging.** When `--with-loop` is set,
+  `init` simply **does not emit a `Stop` hook of its own**; the loop pack's
+  settings.json (the gate hook) is the *sole* writer. There is no merge order to get
+  wrong. (We do **not** depend on "the pack runs last and overwrites init" — `init`
+  emits no competing hook at all.)
+- **Overwrite clobbers pre-existing user hooks.** Because settings.json is replaced
+  wholesale, any hooks a user had hand-added to `.claude/settings.json` are lost on
+  `init`/`add` today — this is **pre-existing behavior**, not introduced here, but
+  `--with-loop` inherits it. Tracked in [Idempotency & back-compat](#idempotency--back-compat).
+
 ### Constraints & errors
 
 - `--with-loop --target codex` → `InstallError`: the loop pack supports `claude`
@@ -97,9 +143,9 @@ gate (a superset of `<pm> test`) — and a gate tuned to the project.
   `installPack` target-mismatch error.
 - `--with-loop --global` → error (the loop pack writes project-level scripts/hooks,
   incompatible with a skills-only global install).
-- Stop-hook suppression must be deterministic: the final merged `settings.json`
-  contains the gate hook and **not** `<pm> test`. (Merge mechanics — order of init's
-  write vs. the pack's settings merge — are an implementation detail for the plan.)
+- Stop-hook precedence is deterministic by construction: with `--with-loop`, `init`
+  emits no `Stop` hook, so the loop pack's gate hook is the only one written. The
+  final `settings.json` contains the gate hook and **not** `<pm> test`.
 
 ---
 
@@ -113,7 +159,7 @@ type StackKind = "rust" | "node" | "unknown";
 interface StackProfile {
   kind: StackKind;
   // node-only:
-  pm?: "pnpm" | "npm" | "yarn";        // reuse detectPackageManager()
+  pm?: "pnpm" | "npm" | "yarn" | "bun"; // reuse + extend detectPackageManager()
   testRunner?: "vitest" | "jest" | "node";
   hasTsconfig?: boolean;
   hasBuildScript?: boolean;
@@ -126,6 +172,10 @@ Detection rules (first match wins, read via the injectable IO seam):
 1. `Cargo.toml` present → `{ kind: "rust" }`.
 2. else `package.json` present →
    `{ kind: "node", pm: detectPackageManager(), testRunner, hasTsconfig, hasBuildScript, linter }`:
+   - `pm`: reuse `detectPackageManager()`, **extended to recognize `bun`** — add
+     `bun.lockb` (and `bun.lock`) to its `LOCKFILES` table (`pnpm-lock.yaml`→pnpm,
+     `yarn.lock`→yarn, `package-lock.json`→npm, `bun.lockb`/`bun.lock`→bun). The
+     `packageManager` field (corepack) may also declare `bun@…`.
    - `testRunner`: `vitest`/`jest` if present in `devDependencies` or the `test`
      script names it; else `node` (for `node --test`).
    - `hasTsconfig`: `tsconfig.json` exists.
@@ -226,6 +276,33 @@ cli init --with-loop
 - `backpressure gate` with no `.backpressure/`: clean error pointing at `init --with-loop`.
 - Unknown stack: **not** an error — emits the generic gate + banner (fail-closed at *run* time, not install time).
 
+## Idempotency & back-compat
+
+Re-running install/regen is a first-class case (the loop itself is amnesiac and
+developers will re-run freely).
+
+- **Re-run is deterministic.** `init --with-loop` and `backpressure gate` are
+  idempotent for a fixed stack: `emitGate(profile)` is pure, so re-running rewrites
+  byte-identical content. Running twice changes nothing (modulo a fresh mtime).
+- **Provenance header + hand-edit protection.** The emitted gate begins with a
+  sentinel header — `# @generated by backpressure gate — edits are overwritten;
+  re-run 'backpressure gate' to retune`. `writeTunedGate` overwrites a gate that
+  carries this header freely. If the target gate is **missing the header**
+  (hand-authored or hand-edited), it **refuses and warns** (clean `backpressure:`
+  line) rather than clobbering the developer's work; `backpressure gate --force`
+  overrides. The install-time auto-tune (`--with-loop`/`add`) only ever retunes the
+  gate it *just* wrote from the bundled pack, so it never destroys prior hand edits.
+- **The pre-#8 `add` route.** Repos that installed the loop pack before this feature
+  (or via the bare-repo path fixed in PR #7/#8) carry the **static** gate. Those are
+  fully supported: `backpressure gate` detects the stack and retunes the existing
+  `.backpressure/scripts/backpressure-gate.sh` in place. No re-`add` required.
+- **`settings.json` overwrite is inherited, not introduced.** `init`/`add` already
+  overwrite `.claude/settings.json` wholesale (see Decision A). `--with-loop` does
+  not change that; a true read-merge of user-authored hooks is **out of scope here**
+  and noted as a separate future improvement.
+- **`backpressure gate` without `.backpressure/`** (loop pack not installed) → clean
+  error pointing at `init --with-loop`. Never scaffolds a half-install.
+
 ## Testing strategy
 
 - `test/install/stack.test.ts` (`@acceptance`): rust (Cargo.toml), node+vitest,
@@ -238,13 +315,19 @@ cli init --with-loop
 - `test/install/init.test.ts`: `init({ withLoop: true })` writes the loop pack files
   and the **gate** Stop hook (not `<pm> test`); `--with-loop --target codex` errors.
 - `test/cli.test.ts`: `--with-loop` flag registered on `init`; `gate` command
-  registered and emits a gate (not a stub).
+  registered and emits a gate (not a stub); `gate` with no `.backpressure/` →
+  clean error.
+- `test/install/gate.test.ts` (idempotency & protection): `writeTunedGate` run
+  twice yields byte-identical output; refuses a header-less (hand-edited) gate and
+  succeeds with `--force`; the emitted gate carries the `@generated` provenance
+  header.
 - The composite gate (`./scripts/backpressure-gate.sh`) must be green.
 
 ## Risks / open questions for the plan
 
-- **Stop-hook merge order** in `settings.json` (init write vs. pack settings merge) —
-  must yield exactly one (gate) hook. Pin with an `@acceptance` test.
+- **Stop-hook via omission** (not merge): `init --with-loop` must emit no `Stop`
+  hook so the pack's gate hook is the only one in the overwritten `settings.json`.
+  Pin with an `@acceptance` test asserting exactly one hook = the gate.
 - **Generating the bundled fallback** from `emitGate("unknown")` vs. keeping the
   hand-written static script (drift risk) — recommend generating.
 - **Node linter fallback** when neither biome nor eslint is present (`linter: "none"`)
