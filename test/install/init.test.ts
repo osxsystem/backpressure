@@ -17,7 +17,7 @@ import { parse } from "smol-toml";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { MissingSkillSourceError, SkillVerificationError } from "../../src/install/errors.js";
 import type { InstallIo } from "../../src/install/init.js";
-import { bundledSkillsDir, DEFAULT_HOOKS, init } from "../../src/install/init.js";
+import { bundledPacksDir, bundledSkillsDir, DEFAULT_HOOKS, init } from "../../src/install/init.js";
 import { planInstall } from "../../src/install/plan.js";
 
 // The bundled skills dir at <repoRoot>/skills, two levels up from this file.
@@ -389,5 +389,21 @@ describe("bundledSkillsDir", () => {
     await expect(
       access(join(bundledSkillsDir(), "building-adaptive-ui", "SKILL.md")),
     ).resolves.toBeUndefined();
+  });
+});
+
+describe("bundledPacksDir + withLoop hook suppression (@acceptance)", () => {
+  it("bundledPacksDir resolves the package's own packs/ dir", () => {
+    expect(bundledPacksDir().endsWith("/packs")).toBe(true);
+  });
+
+  it("init withLoop:true plans NO hooks file (the loop pack owns the Stop hook)", async () => {
+    const { plan } = await init("claude", "/repo", { dryRun: true, withLoop: true });
+    expect(plan.some((f) => f.kind === "hooks")).toBe(false);
+  });
+
+  it("init without withLoop still plans the hooks file", async () => {
+    const { plan } = await init("claude", "/repo", { dryRun: true });
+    expect(plan.some((f) => f.kind === "hooks")).toBe(true);
   });
 });
