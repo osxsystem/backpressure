@@ -111,6 +111,7 @@ backpressure <command> [options]
 | `build`  | ✅ wired | Compiles and **previews** the per-target config (read-only; does not install). |
 | `index`  | ✅ wired | Reports which Backpressure capabilities are installed in the current repo. |
 | `add`    | ✅ wired | Fetch and install a capability pack from a GitHub repo. |
+| `gate`   | ✅ wired | (Re)generates the composite gate tuned to this repo's stack (Rust / Node-TS). |
 
 ### `backpressure init`
 
@@ -122,6 +123,7 @@ backpressure <command> [options]
 | `--all-skills` | off | Install **every** bundled skill the pack ships, not just the defaults. |
 | `--global` | off | Install skills only into the **user-level** skills dir (`~/.claude/skills` or `~/.codex/skills`). Hooks and agent files are **not** written. |
 | `--gate <command>` | auto-detected `<pm> test` | Command the installed **Stop-gate hook** runs after each turn. When omitted, Backpressure detects the repo's package manager (`packageManager` field → lockfile → `pnpm` fallback) and emits the matching `<pm> test` (e.g. `yarn test` in a yarn repo). Point it at `./scripts/backpressure-gate.sh` to install the composite gate instead of bare tests. |
+| `--with-loop` | off | Also install the bundled **backpressure-loop** pack and a **stack-tuned** gate, in one step (claude only). Equivalent to `init` + `add …/backpressure-loop`, but network-free and auto-tuned. |
 
 Behaviour:
 
@@ -332,6 +334,17 @@ npx @osxsystem/backpressure@latest add osxsystem/backpressure/packs/backpressure
 | `--yes` | off | Skip the trust prompt (for CI). |
 
 Set `GITHUB_TOKEN` to raise the API rate limit or install from a private repo.
+
+---
+
+### `backpressure gate`
+
+Regenerates `.backpressure/scripts/backpressure-gate.sh` tuned to the detected
+stack — `cargo fmt/clippy/test/build` for a Rust crate (`Cargo.toml`), the repo's
+package manager + `tsc`/test/build for a Node project (`package.json`), else a
+generic pipeline behind a loud tune-me banner. Pass `--force` to overwrite a
+hand-edited gate (one missing the `@generated` marker). Runs automatically during
+`init --with-loop` and `add …/backpressure-loop`.
 
 ---
 
