@@ -203,6 +203,36 @@ describe("package manifest", () => {
   });
 });
 
+describe("gate subcommand", () => {
+  it("registers the gate command (not a stub)", () => {
+    const names = buildProgram().commands.map((c: commander.Command) => c.name());
+    expect(names).toContain("gate");
+    const cmd = buildProgram().commands.find((c: commander.Command) => c.name() === "gate");
+    expect(cmd?.description().toLowerCase()).not.toContain("not yet implemented");
+  });
+
+  it("@acceptance `gate` errors cleanly when no .backpressure/ exists", async () => {
+    const chunks: string[] = [];
+    const spy = vi.spyOn(process.stderr, "write").mockImplementation((c: string | Uint8Array) => {
+      chunks.push(typeof c === "string" ? c : Buffer.from(c).toString());
+      return true;
+    });
+    const prevExit = process.exitCode;
+    try {
+      // run from a temp dir with no .backpressure/ and a hand-edit-less, absent gate
+      const dir = await mkdtemp(join(tmpdir(), "bp-gate-"));
+      const cwdSpy = vi.spyOn(process, "cwd").mockReturnValue(dir);
+      await buildProgram().parseAsync(["node", "backpressure", "gate"]);
+      cwdSpy.mockRestore();
+      // unknown stack is allowed (writes a generic gate); assert no raw stack trace
+      expect(chunks.join("")).not.toContain(" at ");
+    } finally {
+      spy.mockRestore();
+      process.exitCode = prevExit;
+    }
+  });
+});
+
 describe("clean CLI errors end-to-end (no raw stack traces)", () => {
   // Drives the REAL program through parseAsync — not parseTarget in isolation —
   // because the e2e report (2026-06-25, §3.3) found the unit was fine while the

@@ -11,6 +11,7 @@ import { nodeBytesIo, nodePackFetcher } from "./add/fetch.js";
 import { installPack } from "./add/install-pack.js";
 import { build, formatArtifacts } from "./install/build.js";
 import { InstallError } from "./install/errors.js";
+import { writeTunedGate } from "./install/gate.js";
 import { bundledSkillsDir, init, nodeInstallIo } from "./install/init.js";
 import { formatInventory, inventory } from "./install/inventory.js";
 import { DEFAULT_CAPABILITIES, resolveInstalledSkills } from "./install/plan.js";
@@ -294,6 +295,24 @@ export function buildProgram(): commander.Command {
     });
 
   program
+    .command("gate")
+    .description("(Re)generate the composite gate tuned to this repo's stack.")
+    .option("--force", "Overwrite a hand-edited gate (one without the generated marker).")
+    .action(async (options: { force?: boolean }) => {
+      try {
+        const { path, profile } = await writeTunedGate(cwd(), nodeInstallIo, {
+          force: options.force,
+        });
+        process.stdout.write(`Wrote ${path}\nStack: ${profile.kind}\n`);
+      } catch (e) {
+        const line = cliErrorLine(e);
+        if (line === null) throw e;
+        process.stderr.write(`${line}\n`);
+        process.exitCode = 1;
+      }
+    });
+
+  program
     .command("add <owner/repo>")
     .description("Install a capability pack from a GitHub repo into this repo.")
     .option("--target <target>", "Which CLI to compile for (claude or codex).", "claude")
@@ -316,6 +335,11 @@ export function buildProgram(): commander.Command {
         for (const f of files) process.stdout.write(`Wrote: ${join(baseDir, f)}\n`);
         for (const n of notices) process.stdout.write(`Note: ${n}\n`);
         process.stdout.write(`pinned ${ref.split("@")[0]}@${sha}\n`);
+        // If the pack installed the composite gate, tune it to this repo's stack.
+        if (files.some((f) => f.endsWith("backpressure-gate.sh"))) {
+          const { profile } = await writeTunedGate(baseDir, nodeInstallIo, { force: true });
+          process.stdout.write(`gate tuned for: ${profile.kind}\n`);
+        }
       } catch (e) {
         const line = cliErrorLine(e);
         if (line === null) throw e;
