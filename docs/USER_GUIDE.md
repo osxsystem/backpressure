@@ -68,8 +68,9 @@ pnpm link --global       # makes `backpressure` available globally
 backpressure --help
 ```
 
-> **v0 note:** the package is `private` and not published to npm. You consume it
-> from this repo (the `backpressure` bin, or the source modules — see the
+> **Install:** the package is published to npm. Run it without installing via
+> `npx @osxsystem/backpressure@latest <command>`, or build from this repo (the
+> `backpressure` bin) / consume the source modules directly (see the
 > [Library API](#library-api-reference)).
 
 ---
