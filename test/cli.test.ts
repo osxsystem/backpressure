@@ -165,6 +165,32 @@ describe("buildProgram", () => {
     const flags = initCmd?.options.map((o: { long?: string }) => o.long);
     expect(flags).toContain("--with-loop");
   });
+
+  it("@acceptance --version reports the package.json version (no hardcode)", async () => {
+    const pkg = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
+    // Driving --version proves the flag is wired AND sourced from package.json,
+    // so `backpressure --version` can never drift from what npm published.
+    const program = buildProgram();
+    program.exitOverride(); // stop commander from calling process.exit on --version
+    const chunks: string[] = [];
+    const spy = vi
+      .spyOn(process.stdout, "write")
+      .mockImplementation((chunk: string | Uint8Array): boolean => {
+        chunks.push(typeof chunk === "string" ? chunk : Buffer.from(chunk).toString());
+        return true;
+      });
+    try {
+      // commander prints the version then throws a CommanderError (exitOverride).
+      await program.parseAsync(["node", "backpressure", "--version"]);
+      throw new Error("expected --version to exit via exitOverride");
+    } catch (e) {
+      // The CommanderError's message carries the version; stdout received it too.
+      expect((e as Error).message).toContain(pkg.version);
+    } finally {
+      spy.mockRestore();
+    }
+    expect(chunks.join("")).toContain(pkg.version);
+  });
 });
 
 describe("add subcommand", () => {
