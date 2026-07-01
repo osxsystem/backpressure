@@ -33,6 +33,34 @@ memory of previous loops. The repository's memory files ARE your memory:
 You may use up to 500 parrallel subagents for all operations but only 1 subagent for build/tests of rust.
 (Many subagents for search/research/edit; EXACTLY ONE for build/test — parallel builds collide.)
 
+## Fan-out discipline — how to actually use those subagents
+The line above is a CEILING, not a quota. Fan-out is a throughput trick for the
+ONE item you picked this loop — it does NOT change the one-item-per-loop rule.
+Never work more than one `- [ ]` item per loop, even in parallel: cross-item
+fan-out reintroduces write-collisions and breaks one-commit-per-loop and the
+`fix_plan.md` hard ordering. Do exactly one thing (see the top of this file).
+
+- READ / RESEARCH — fan out freely. Dispatch parallel subagents to search the
+  codebase, locate call-sites, and read independent files. Spawn them READ-ONLY
+  (Read/Grep tools only, like the bundled `reviewer` agent) — a read-only
+  subagent cannot collide with anything. This is where the speed comes from.
+- WRITES — single-writer by DEFAULT. There is NO structural lock on edits: an
+  edit-subagent inherits Write/Edit and nothing stops two of them clobbering the
+  same file. So by default, subagents RETURN a proposed diff and YOU, the
+  orchestrator, apply every write yourself, serially. One hand on the pen.
+- PARALLEL EDITS — opt-in, only when PROVABLY disjoint. You MAY fan out edits
+  ONLY if you first name a non-overlapping file set (each subagent owns paths no
+  other subagent touches). If you cannot list the disjoint paths up front, or
+  you're unsure, fall back to the single-writer funnel. When in doubt, funnel.
+- BUILD / TEST — orchestrator-only, once, at the end. No subagent runs the gate.
+  When every subagent has returned and all writes are applied, YOU run the full
+  composite gate (step 6) exactly once, alone. Never run build/test while any
+  subagent is live (`flock /tmp/ralph-build.lock` is a backstop, not a license —
+  concurrent builds collide on shared dirs, lockfiles, and ports).
+
+Sequence every loop: fan out to READ → collect → apply WRITES serially →
+let subagents quiesce → run the gate once.
+
 ## When you write a test or doc, capture the WHY — the next loop has no memory of intent.
 
 ## Never push to a remote, never publish, never run `git push`. Work only on this
