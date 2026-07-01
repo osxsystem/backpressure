@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { realpathSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { argv } from "node:process";
@@ -22,6 +22,22 @@ import { formatSkills, listBundledSkills } from "./skills/list.js";
 import { listSkillDirs } from "./skills/load.js";
 
 const { Command } = commander;
+
+/**
+ * The package version, read once from the bundled `package.json` — the single
+ * source of truth, so `backpressure --version` never drifts from what npm
+ * published. Resolves relative to this module (`dist/cli.js` when built,
+ * `src/cli.ts` under vitest); both sit one dir below their `package.json`.
+ * Wrapped so a missing/unreadable manifest can never crash the CLI on import.
+ */
+export function packageVersion(): string {
+  try {
+    const raw = readFileSync(new URL("../package.json", import.meta.url), "utf8");
+    return (JSON.parse(raw) as { version?: string }).version ?? "0.0.0";
+  } catch {
+    return "0.0.0";
+  }
+}
 
 /**
  * Format an error as a CLI error line when it is an expected install failure.
@@ -83,6 +99,7 @@ export function buildProgram(): commander.Command {
   const program = new Command();
   program
     .name("backpressure")
+    .version(packageVersion(), "-V, --version", "Print the installed backpressure version.")
     .description("A capability pack for agentic coding CLIs (Claude Code and Codex CLI).");
 
   program
@@ -314,7 +331,7 @@ export function buildProgram(): commander.Command {
         const { path, profile } = await writeTunedGate(process.cwd(), nodeInstallIo, {
           force: options.force,
         });
-        process.stdout.write(`Wrote ${path}\nStack: ${profile.kind}\n`);
+        process.stdout.write(`Wrote: ${path}\nStack: ${profile.kind}\n`);
       } catch (e) {
         const line = cliErrorLine(e);
         if (line === null) throw e;

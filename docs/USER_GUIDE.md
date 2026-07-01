@@ -114,6 +114,8 @@ backpressure <command> [options]
 | `add`    | ✅ wired | Fetch and install a capability pack from a GitHub repo. |
 | `gate`   | ✅ wired | (Re)generates the composite gate tuned to this repo's stack (Rust / Node-TS). |
 
+> **`-V` / `--version`** prints the installed package version (e.g. `0.2.0`) and exits — a quick way to confirm which build is on your `PATH`.
+
 ### `backpressure skills list`
 
 Lists every skill bundled with the package, so you can see what's installable
@@ -752,8 +754,8 @@ pnpm run build    # tsup -> dist/
 
 ## Known limitations (v0 notes)
 
-- **All four CLI commands are wired** (`init`, `remove`, `build`, `index`) —
-  there are no stub subcommands in v0.
+- **All seven CLI commands are wired** (`init`, `remove`, `build`, `index`,
+  `skills`, `add`, `gate`) — there are no stub subcommands in v0.
 - **The issue tracker is deferred to post-v0 and is not installed.** Its source
   (`src/core/task.ts`, `src/tracker/*`) ships in the tree and is tested, but
   `init` registers no MCP server, so no `.mcp.json` / `[mcp_servers]` table is

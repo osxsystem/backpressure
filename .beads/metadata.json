@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "backpressure",
+  "project_id": "88a6f9f1-2365-4a59-bbf3-dfd318c1e430"
+}
