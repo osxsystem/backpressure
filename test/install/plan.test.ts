@@ -15,11 +15,22 @@ describe("planInstall", () => {
     expect(files).toEqual([
       { path: join(repo, ".claude", "settings.json"), kind: "hooks" },
       { path: join(repo, ".claude", "agents", "reviewer.md"), kind: "agent" },
+      { path: join(repo, ".claude", "agents", "researcher.md"), kind: "agent" },
       {
         path: join(repo, ".claude", "skills", "building-adaptive-ui", "SKILL.md"),
         kind: "skill",
       },
     ]);
+  });
+
+  it("bundles a read-only researcher for safe parallel fan-out (no Write/Edit tools)", () => {
+    const researcher = DEFAULT_CAPABILITIES.subagents.find((s) => s.name === "researcher");
+    expect(researcher).toBeDefined();
+    // Read-only by construction is the whole point: many can run in parallel
+    // without write-collisions (see the fan-out discipline in PROMPT.md).
+    expect(researcher?.tools).toEqual(["Read", "Grep", "Glob"]);
+    expect(researcher?.tools).not.toContain("Write");
+    expect(researcher?.tools).not.toContain("Edit");
   });
 
   it("plans .mcp.json only when MCP servers are registered", () => {
