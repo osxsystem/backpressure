@@ -33,7 +33,41 @@ subagents (Task) for research/search; EXACTLY ONE for any build/test (§2.8).
    item traceable to a spec; no item bundling two concerns (§3.5.2).
 4. `PROMPT.md` — standing orders. Reproduce Huntley's directives VERBATIM (keep
    `parrallel`, lowercase `rust`, and the ALL-CAPS emphasis); point the gate step
-   at `./scripts/backpressure-gate.sh` (§3.5.1).
+   at `./scripts/backpressure-gate.sh` (§3.5.1). Immediately BENEATH the verbatim
+   line, add this stack-neutral **Fan-out discipline** block verbatim (it turns
+   the ceiling into a safe procedure — read-fan-out, single-writer,
+   orchestrator-only gate; §2.8):
+
+   ```markdown
+   ## Fan-out discipline — how to actually use those subagents
+   The line above is a CEILING, not a quota. Fan-out is a throughput trick for the
+   ONE item you picked this loop — it does NOT change the one-item-per-loop rule.
+   Never work more than one `- [ ]` item per loop, even in parallel: cross-item
+   fan-out reintroduces write-collisions and breaks one-commit-per-loop and the
+   `fix_plan.md` hard ordering. Do exactly one thing (see the top of this file).
+
+   - READ / RESEARCH — fan out freely. Dispatch parallel subagents to search the
+     codebase, locate call-sites, and read independent files. Spawn them READ-ONLY
+     (Read/Grep/Glob tools only, like the bundled `researcher` agent) — a read-only
+     subagent cannot collide with anything. This is where the speed comes from.
+   - WRITES — single-writer by DEFAULT. There is NO structural lock on edits: an
+     edit-subagent inherits Write/Edit and nothing stops two of them clobbering the
+     same file. So by default, subagents RETURN a proposed diff and YOU, the
+     orchestrator, apply every write yourself, serially. One hand on the pen.
+   - PARALLEL EDITS — opt-in, only when PROVABLY disjoint. You MAY fan out edits
+     ONLY if you first name a non-overlapping file set (each subagent owns paths no
+     other subagent touches). If you cannot list the disjoint paths up front, or
+     you're unsure, fall back to the single-writer funnel. When in doubt, funnel.
+   - BUILD / TEST — orchestrator-only, once, at the end. No subagent runs the gate.
+     When every subagent has returned and all writes are applied, YOU run the full
+     composite gate (`./scripts/backpressure-gate.sh`) exactly once, alone. Never
+     run build/test while any subagent is live (the gate's `flock` mutex is a
+     backstop, not a license — concurrent builds collide on shared build dirs,
+     lockfiles, and ports).
+
+   Sequence every loop: fan out to READ → collect → apply WRITES serially →
+   let subagents quiesce → run the gate once.
+   ```
 5. `CLAUDE.md` — the Claude-side AGENT.md: how to build/run/test, "one productive
    commit per loop", "never push to main / never publish" (§3.5.4).
 6. Commit the baseline:

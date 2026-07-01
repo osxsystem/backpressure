@@ -32,6 +32,19 @@ export const DEFAULT_CAPABILITIES: InstallCapabilities = {
       prompt: "You are a careful code reviewer. Report only concrete issues.",
       tools: ["Read", "Grep"],
     },
+    {
+      // Read-only by construction (Read/Grep/Glob, no Write/Edit) so the loop's
+      // fan-out discipline (PROMPT.md) can dispatch many of these in parallel
+      // with zero write-collision risk — the orchestrator remains the single
+      // writer. This is the purpose-built target for "spawn them READ-ONLY".
+      name: "researcher",
+      description: "Read-only codebase research: locate call-sites and read files, never writes.",
+      prompt:
+        "You are a read-only research subagent. Search the codebase, locate the " +
+        "relevant call-sites, and read files to answer the orchestrator's question. " +
+        "Report concrete findings with file:line references. You do not modify files.",
+      tools: ["Read", "Grep", "Glob"],
+    },
   ],
   mcpServers: [],
   skills: ["building-adaptive-ui"],

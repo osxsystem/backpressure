@@ -141,3 +141,55 @@ blocks (`loop/governor.ts`, `loop/journal.ts`) and the headless-invocation seam
 (`seam/run.ts`) are there for assembling your own harness. New to the technique?
 See the [Ralph beginner guide](docs/RALPH_GUIDE.md) and the
 [User Guide](docs/USER_GUIDE.md#loop-building-blocks).
+
+### Layered controls & the concrete tools at each
+
+The loop is the same box wrapped in seven controls (the L0–L7 injection-point
+model from [`docs/RALPH_PRODUCTION_GUIDE.md §2.3`](docs/RALPH_PRODUCTION_GUIDE.md)).
+The top lane is the pure control flow (green/red at the **L3 gate**); the bottom
+**tools swimlane** runs in parallel — each dotted link maps a stage to the
+concrete tools it fires.
+
+```mermaid
+flowchart LR
+    subgraph CONTROL["⎯⎯ CONTROL FLOW (L0 → L7) ⎯⎯"]
+        direction LR
+        L0["L0<br/>SANDBOX"] --> L1["L1<br/>MEMORY"] --> L2["L2<br/>INVOKE"] --> L3{"L3<br/>GATE"}
+        L3 -->|green| L4["L4<br/>GOVERNOR"]
+        L3 -->|red| L6["L6<br/>RECOVERY"]
+        L6 --> L4
+        L4 --> L5["L5<br/>JOURNAL"]
+        L5 -.next loop.-> L1
+        L4 -->|halt / done| L7["L7<br/>CI · MERGE"]
+    end
+
+    subgraph TOOLS["⎯⎯ TOOLS SWIMLANE ⎯⎯"]
+        direction LR
+        T0["Docker · gosu · iptables<br/>ipset · dig/curl/jq · git branch-guard"]
+        T1["PROMPT.md · fix_plan.md<br/>specs/* · CLAUDE.md"]
+        T2["claude -p · --model<br/>--max-budget-usd · --max-turns<br/>--dangerously-skip-permissions · timeout"]
+        T3["biome · tsc · stub-guard<br/>jscpd · flock(pnpm test && build)<br/>test:acceptance · gitleaks · lock-guard"]
+        T4["MAX_ITERS · MAX_STALLS · ITER_TIMEOUT<br/>CAMPAIGN_HOURS · MIN_FREE_MB · STOP"]
+        T5["git commit · JSONL line<br/>(git log = the trail)"]
+        T6["git reset --hard refs/green<br/>notify() webhook"]
+        T7["PR · CI re-runs SAME gate<br/>pnpm audit · human → main"]
+    end
+
+    L0 -.-> T0
+    L1 -.-> T1
+    L2 -.-> T2
+    L3 -.-> T3
+    L4 -.-> T4
+    L5 -.-> T5
+    L6 -.-> T6
+    L7 -.-> T7
+
+    classDef ctrl fill:#1f2937,stroke:#60a5fa,color:#e5e7eb
+    classDef gate fill:#7f1d1d,stroke:#f87171,color:#fee2e2
+    classDef merge fill:#064e3b,stroke:#34d399,color:#d1fae5
+    classDef tool fill:#0f172a,stroke:#94a3b8,color:#cbd5e1
+    class L0,L1,L2,L4,L5,L6 ctrl
+    class L3 gate
+    class L7 merge
+    class T0,T1,T2,T3,T4,T5,T6,T7 tool
+```
