@@ -78,8 +78,35 @@ When a loop iteration is driving this repo (see `PROMPT.md`, `specs/`, `fix_plan
 No custom agent loop or context manager (the CLI's job). No marketplace publishing.
 The store is a JSON file (`better-sqlite3` is a planned post-v0 upgrade).
 
+## Why Beads, and when to reach for it
 
-<!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:6cd5cc61 -->
+**Why:** this is a headless-loop project — iterations have amnesia (see the loop
+discipline above). Beads (`bd`) gives work a home *outside* the model's context:
+an issue survives compaction, a killed loop, and a brand-new session. TodoWrite,
+`TaskCreate`, and markdown TODO lists don't — they vanish with the context window
+and fragment across sessions. So task state lives in `bd`, and cross-session
+insight lives in `bd remember`, never in scratch files. (The detailed command
+reference and session-close protocol below this line are machine-managed by `bd`;
+run `bd prime` to regenerate/see them — this section is the hand-written *why*.)
+
+**When to reach for it:**
+
+- **Before writing code** — create and claim the issue first (`bd create …`,
+  `bd update <id> --claim`) so the *intent* of a change is recorded before the
+  diff exists. One unchecked item ≈ one issue ≈ one focused commit.
+- **Starting a session** — `bd ready` is the entry point; `bd show <id>` for detail.
+- **Finishing work** — `bd close <id>` once `./scripts/backpressure-gate.sh` is
+  green; file follow-up issues for anything left over.
+- **Persisting knowledge** — `bd remember "insight"` for what the next amnesiac
+  loop will need; `bd memories <keyword>` to recall it. Not MEMORY.md files.
+
+**When NOT to:** don't track work in TodoWrite/`TaskCreate`/markdown TODOs, and
+don't commit, push, or `bd dolt push` without the authority the active profile
+grants (see Agent Context Profiles below). The autonomous loop's "never push"
+rule still wins over any Beads sync step.
+
+
+<!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:970c3bf2 -->
 ## Beads Issue Tracker
 
 This project uses **bd (beads)** for issue tracking. Run `bd prime` to see full workflow context and commands.
@@ -123,6 +150,7 @@ This protocol applies when ending a Beads implementation workflow. It is subordi
 
    # Team-maintainer opt-in only, unless current instructions forbid it:
    git pull --rebase
+   bd dolt push
    git push
    git status
    ```
