@@ -114,6 +114,8 @@ backpressure <command> [options]
 | `add`    | ✅ wired | Fetch and install a capability pack from a GitHub repo. |
 | `gate`   | ✅ wired | (Re)generates the composite gate tuned to this repo's stack (Rust / Node-TS). |
 
+> **`-V` / `--version`** prints the installed package version (e.g. `0.2.0`) and exits — a quick way to confirm which build is on your `PATH`.
+
 ### `backpressure skills list`
 
 Lists every skill bundled with the package, so you can see what's installable
