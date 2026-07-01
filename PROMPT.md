@@ -42,7 +42,7 @@ fan-out reintroduces write-collisions and breaks one-commit-per-loop and the
 
 - READ / RESEARCH — fan out freely. Dispatch parallel subagents to search the
   codebase, locate call-sites, and read independent files. Spawn them READ-ONLY
-  (Read/Grep tools only, like the bundled `reviewer` agent) — a read-only
+  (Read/Grep/Glob tools only, like the bundled `researcher` agent) — a read-only
   subagent cannot collide with anything. This is where the speed comes from.
 - WRITES — single-writer by DEFAULT. There is NO structural lock on edits: an
   edit-subagent inherits Write/Edit and nothing stops two of them clobbering the
