@@ -331,7 +331,7 @@ export function buildProgram(): commander.Command {
         const { path, profile } = await writeTunedGate(process.cwd(), nodeInstallIo, {
           force: options.force,
         });
-        process.stdout.write(`Wrote ${path}\nStack: ${profile.kind}\n`);
+        process.stdout.write(`Wrote: ${path}\nStack: ${profile.kind}\n`);
       } catch (e) {
         const line = cliErrorLine(e);
         if (line === null) throw e;
